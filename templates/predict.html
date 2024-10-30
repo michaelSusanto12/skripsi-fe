@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <title>Prediksi Penjualan</title>
+
+    <style>
+        body {
+            background-color: #fae8b4;
+        }
+
+        .navbar-custom {
+            background-color: #3d3d3d;
+        }
+
+        .navbar-nav .nav-link {
+            color: #fae8b4;
+        }
+
+        .navbar-brand {
+            color: #fae8b4;
+        }
+
+        .form-container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .btn-dark {
+            position: relative;
+        }
+
+        .spinner-border {
+            display: none;
+            width: 1rem;
+            height: 1rem;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-custom navbar-expand-lg navbar-light">
+        <div class="container-fluid">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse nav justify-content-end" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/" style="color: #e0e0e0;">Beranda</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/upload" style="color: #e0e0e0;">Upload</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/predict" style="color: #fae8b4;">Prediksi</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/about" style="color: #e0e0e0;">Tentang</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <h1 class="text-center">Prediksi Penjualan Produk</h1>
+        <div class="form-container mt-4">
+            <form id="predict-form" action="/predict" method="post">
+                <div class="mb-3">
+                    <label for="category" class="form-label">Kategori Produk:</label>
+                    <select name="category" id="category" class="form-select">
+                        <option value="lada_halus">Lada Halus</option>
+                        <option value="lada_butir">Lada Butir</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="n_months" class="form-label">Jumlah Bulan Prediksi:</label>
+                    <select name="n_months" id="n_months" class="form-select">
+                        <option value="1">1 Bulan</option>
+                        <option value="2">2 Bulan</option>
+                        <option value="3">3 Bulan</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-dark w-100" id="predict-btn">
+                    <span id="loadingSpinner" class="spinner-border spinner-border-sm"></span>
+                    <span id="buttonText">Prediksi</span>
+                </button>
+            </form>
+        </div>
+
+        <div id="result" class="mt-5">
+            <div class="plot-container">
+                <img id="plot" src="" alt="Plot Prediksi" class="img-fluid" style="display: none;">
+            </div>
+            <div id="metrics" style="display: none;" class="mt-4">
+                <h2>Hasil Evaluasi</h2>
+                <div class="row">
+                    <div class="col-md-4">
+                        <p><strong>Training Error:</strong></p>
+                        <ul>
+                            <li>MAE: <span id="train_mae"></span></li>
+                            <li>MSE: <span id="train_mse"></span></li>
+                            <li>RMSE: <span id="train_rmse"></span></li>
+                            <li>MAPE: <span id="train_mape"></span></li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Validation Error:</strong></p>
+                        <ul>
+                            <li>MAE: <span id="val_mae"></span></li>
+                            <li>MSE: <span id="val_mse"></span></li>
+                            <li>RMSE: <span id="val_rmse"></span></li>
+                            <li>MAPE: <span id="val_mape"></span></li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Testing Error:</strong></p>
+                        <ul>
+                            <li>MAE: <span id="test_mae"></span></li>
+                            <li>MSE: <span id="test_mse"></span></li>
+                            <li>RMSE: <span id="test_rmse"></span></li>
+                            <li>MAPE: <span id="test_mape"></span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('predict-form').addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const formData = new FormData(this);
+            const predictBtn = document.getElementById('predict-btn');
+            const spinner = document.getElementById('loadingSpinner');
+            const buttonText = document.getElementById('buttonText');
+            const plotElement = document.getElementById('plot');
+            const metricsContainer = document.getElementById('metrics');
+
+            spinner.style.display = 'inline-block';
+            buttonText.style.display = 'none';
+            predictBtn.disabled = true;
+            plotElement.style.display = 'none';
+            metricsContainer.style.display = 'none';
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok.');
+                }
+
+                const data = await response.json();
+
+                plotElement.src = 'data:image/png;base64,' + data.plot_url;
+                plotElement.style.display = 'block';
+
+                metricsContainer.style.display = 'block';
+                document.getElementById('train_mae').textContent = data.train_mae.toFixed(4);
+                document.getElementById('train_mse').textContent = data.train_mse.toFixed(4);
+                document.getElementById('train_rmse').textContent = data.train_rmse.toFixed(4);
+                document.getElementById('train_mape').textContent = (data.train_mape).toFixed(4);
+
+                document.getElementById('val_mae').textContent = data.val_mae.toFixed(4);
+                document.getElementById('val_mse').textContent = data.val_mse.toFixed(4);
+                document.getElementById('val_rmse').textContent = data.val_rmse.toFixed(4);
+                document.getElementById('val_mape').textContent = (data.val_mape).toFixed(4);
+
+                document.getElementById('test_mae').textContent = data.test_mae.toFixed(4);
+                document.getElementById('test_mse').textContent = data.test_mse.toFixed(4);
+                document.getElementById('test_rmse').textContent = data.test_rmse.toFixed(4);
+                document.getElementById('test_mape').textContent = (data.test_mape).toFixed(4);
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while processing the prediction.');
+            } finally {
+                spinner.style.display = 'none';
+                buttonText.style.display = 'inline';
+                predictBtn.disabled = false;
+            }
+        });
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
