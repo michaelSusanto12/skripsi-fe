@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Penjualan Produk</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Arial', sans-serif;
+        }
+
+        body {
+            background-color: #fae8b4;
+        }
+
+        .navbar-custom {
+            background-color: #3d3d3d;
+        }
+
+        .navbar-nav .nav-link {
+            color: #fae8b4;
+        }
+
+        .navbar-brand {
+            color: #fae8b4;
+        }
+
+        .full-height-container {
+            height: 100vh;
+        }
+
+        .nav-pills .nav-link.active {
+            background-color: #3d3d3d;
+            color: #fae8b4;
+        }
+
+        .nav-pills .nav-link {
+            border-radius: 25px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin: 0 10px;
+        }
+
+        .plot-container {
+            overflow-x: auto;
+            padding: 20px;
+        }
+
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .date-range {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #3d3d3d;
+        }
+
+        .plot-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow: hidden;
+            width: auto;
+            max-width: 100%;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .plot-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .btn-primary {
+                width: 100%;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .form-select {
+                width: 50% !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-custom navbar-expand-lg navbar-light">
+        <div class="container-fluid">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse nav justify-content-end" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/" style="color: #fae8b4;">Beranda</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/upload" style="color: #e0e0e0;">Upload</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/predict" style="color: #e0e0e0;">Prediksi</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/about" style="color: #e0e0e0;">Tentang</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <h1 class="text-center">Penjualan Produk</h1>
+
+        <p class="date-range">{{ date_range }}</p>
+
+        <ul class="nav nav-pills justify-content-center mb-4" id="product-pills">
+            <li class="nav-item">
+                <a class="nav-link {% if selected_product == 'lada_halus' %} active {% endif %}"
+                    href="/penjualan?product=lada_halus">Lada Halus</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if selected_product == 'lada_butir' %} active {% endif %}"
+                    href="/penjualan?product=lada_butir">Lada Butir</a>
+            </li>
+        </ul>
+
+        <div class="plot-container mb-3 pb-3">
+            {% if plot_url %}
+            <img src="data:image/png;base64,{{ plot_url }}" alt="Plot Penjualan" class="img-fluid"
+                style="width: auto; height: auto; max-width: 100%;">
+            {% endif %}
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
