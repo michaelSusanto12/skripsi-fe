@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, flash, jsonify
 import matplotlib.pyplot as plt
-import io
-import base64
+from io import BytesIO
+from base64 import b64encode
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
@@ -12,8 +12,8 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
-import os
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+from os import environ
+environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from tensorflow.keras.losses import Huber
 
 import locale
@@ -157,12 +157,12 @@ def create_plot(product_type):
     plt.grid(True)
     plt.tight_layout()
 
-    img = io.BytesIO()
+    img = BytesIO()
     plt.savefig(img, format='png', dpi=100)
     img.seek(0)
     plt.close()
 
-    plot_url = base64.b64encode(img.getvalue()).decode('utf8')
+    plot_url = b64encode(img.getvalue()).decode('utf8')
 
     start_date = df_selected['date'].min().strftime('%B %Y')
     end_date = df_selected['date'].max().strftime('%B %Y')
@@ -361,12 +361,12 @@ def predict():
             plt.legend()
             plt.xticks(rotation=45)
             plt.tight_layout()
-            img = io.BytesIO()
+            img = BytesIO()
             plt.savefig(img, format='png', dpi=100)
             img.seek(0)
             plt.close()
 
-            plot_url = base64.b64encode(img.getvalue()).decode('utf8')
+            plot_url = b64encode(img.getvalue()).decode('utf8')
 
             return jsonify({
                 'plot_url': plot_url,
