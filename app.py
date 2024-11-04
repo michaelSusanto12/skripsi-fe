@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, flash, jsonify
+from flask import Flask, render_template, request, redirect, flash, jsonify, url_for
 import matplotlib.pyplot as plt
 from io import BytesIO
 from base64 import b64encode
@@ -15,6 +15,7 @@ from datetime import datetime
 from os import environ
 environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from tensorflow.keras.losses import Huber
+import copy
 
 import locale
 locale.setlocale(locale.LC_TIME, 'id_ID')
@@ -391,6 +392,62 @@ def predict():
             return redirect('/')
 
     return render_template('predict.html')
+
+
+def get_sales_data(category, page, items_per_page):
+    offset = (page - 1) * items_per_page
+    category_id = None
+    if category: 
+        category_obj = Categories.query.filter_by(name=category).first()
+        if category_obj:
+            category_id = category_obj.id
+
+    query = Sales.query
+    if category_id:
+        query = query.filter_by(category_id=category_id)
+
+    sales_data = query.offset(offset).limit(items_per_page).all()
+    total_count = Sales.query.filter_by(category_id=category_id).count() if category_id else Sales.query.count()
+    return sales_data, total_count
+
+
+
+@app.route('/delete', methods=['GET'])
+def delete():
+    category = request.args.get('category', default=None)
+    items_per_page = request.args.get('items_per_page', default=5, type=int)
+    page = request.args.get('page', default=1, type=int)
+
+    sales_data, total_count = get_sales_data(category, page, items_per_page)
+
+    total_pages = (total_count + items_per_page - 1) // items_per_page  
+
+    return render_template('delete.html', sales_data=sales_data, selected_category=category, items_per_page=items_per_page, page=page, total_pages=total_pages)
+
+
+
+@app.route('/edit/<int:id>', methods=['POST'])
+def edit_total(id):
+    sale = Sales.query.get(id)  
+    if sale:
+        sale.total = request.form.get('total', type=float)
+        
+        db.session.commit()
+        
+        flash('Data updated successfully!', 'success')
+    else:
+        flash('Sale not found!', 'error')
+    
+    return redirect(url_for('delete', category=request.args.get('category'), items_per_page=request.args.get('items_per_page')))
+
+
+@app.route('/delete/<int:id>', methods=['POST'])
+def delete_data(id):
+    sale = Sales.query.get_or_404(id)
+    db.session.delete(sale)
+    db.session.commit()
+    flash("Data successfully deleted!")
+    return redirect(url_for('delete'))
 
 
 if __name__ == '__main__':
