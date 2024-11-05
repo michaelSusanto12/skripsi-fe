@@ -98,15 +98,15 @@
     </nav>
 
     <div class="container mt-4">
-        <h2>Edit and Delete Sales Data</h2>
+        <h2 class="text-center">Edit dan Menghapus Data Penjualan</h2>
 
         <form method="GET" action="{{ url_for('delete') }}" class="mb-3">
             <div class="row mb-2">
                 <div class="col-md-6 col-12 mb-2">
-                    <label for="category" class="form-label">Select Category:</label>
+                    <label for="category" class="form-label">Pilih Kategori:</label>
                     <select name="category" id="category" class="form-select form-select-sm"
                         onchange="this.form.submit()">
-                        <option value="">-- Select Category --</option>
+                        <option value="">-- Pilih Kategori --</option>
                         <option value="lada_halus" {% if selected_category=='lada_halus' %}selected{% endif %}>Lada
                             Halus</option>
                         <option value="lada_butir" {% if selected_category=='lada_butir' %}selected{% endif %}>Lada
@@ -114,7 +114,7 @@
                     </select>
                 </div>
                 <div class="col-md-6 col-12 mb-2">
-                    <label for="items_per_page" class="form-label">Items Per Page:</label>
+                    <label for="items_per_page" class="form-label">Data Per Halaman:</label>
                     <select name="items_per_page" id="items_per_page" class="form-select form-select-sm"
                         onchange="this.form.submit()">
                         <option value="5" {% if items_per_page==5 %}selected{% endif %}>5</option>

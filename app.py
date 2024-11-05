@@ -15,7 +15,6 @@ from datetime import datetime
 from os import environ
 environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from tensorflow.keras.losses import Huber
-import copy
 
 import locale
 locale.setlocale(locale.LC_TIME, 'id_ID')
@@ -392,6 +391,7 @@ def predict():
             return redirect('/')
 
     return render_template('predict.html')
+
 
 
 def get_sales_data(category, page, items_per_page):
