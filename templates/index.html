@@ -119,7 +119,7 @@
                         <a class="nav-link" href="/about" style="color: #e0e0e0;">Tentang</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/delete" style="color: #e0e0e0;">Delete</a>
+                        <a class="nav-link" href="/delete" style="color: #e0e0e0;">Lihat Data</a>
                     </li>
                 </ul>
             </div>
@@ -129,18 +129,35 @@
     <div class="container mt-5">
         <h1 class="text-center">Penjualan Produk</h1>
 
-        <p class="date-range">{{ date_range }}</p>
+        <form method="get" action="/">
+            <div class="form-group row justify-content-center">
+                <label for="product" class="col-sm-2 col-form-label">Pilih Kategori:</label>
+                <div class="col-sm-4">
+                    <select id="product" name="product" class="form-select" onchange="this.form.submit()">
+                        <option value="lada_halus" {% if selected_product=='lada_halus' %}selected{% endif %}>Lada Halus
+                        </option>
+                        <option value="lada_butir" {% if selected_product=='lada_butir' %}selected{% endif %}>Lada Butir
+                        </option>
+                    </select>
+                </div>
+            </div>
 
-        <ul class="nav nav-pills justify-content-center mb-4" id="product-pills">
-            <li class="nav-item">
-                <a class="nav-link {% if selected_product == 'lada_halus' %} active {% endif %}"
-                    href="/penjualan?product=lada_halus">Lada Halus</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link {% if selected_product == 'lada_butir' %} active {% endif %}"
-                    href="/penjualan?product=lada_butir">Lada Butir</a>
-            </li>
-        </ul>
+            <div class="form-group row justify-content-center mt-3">
+                <label for="year" class="col-sm-2 col-form-label">Pilih Tahun:</label>
+                <div class="col-sm-4">
+                    <select id="year" name="year" class="form-select" onchange="this.form.submit()">
+                        <option value="" {% if not selected_year %}selected{% endif %}>Semua Tahun</option>
+                        {% for year in available_years %}
+                        <option value="{{ year }}" {% if year|string==selected_year|string %}selected{% endif %}>{{ year
+                            }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </form>
+
+        <p class="date-range mt-2 mb-2">{{ date_range }}</p>
+
 
         <div class="plot-container mb-3 pb-3">
             {% if plot_url %}
@@ -149,6 +166,7 @@
             {% endif %}
         </div>
     </div>
+
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>

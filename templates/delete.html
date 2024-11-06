@@ -90,7 +90,7 @@
                         <a class="nav-link" href="/about" style="color: #e0e0e0;">Tentang</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="/delete" style="color: #fae8b4;">Delete</a>
+                        <a class="nav-link" href="/delete" style="color: #fae8b4;">Lihat Data</a>
                     </li>
                 </ul>
             </div>
@@ -121,32 +121,42 @@
                         <option value="10" {% if items_per_page==10 %}selected{% endif %}>10</option>
                         <option value="15" {% if items_per_page==15 %}selected{% endif %}>15</option>
                         <option value="20" {% if items_per_page==20 %}selected{% endif %}>20</option>
+                        <option value="all" {% if items_per_page is none %}selected{% endif %}>Semua</option>
                     </select>
                 </div>
+
             </div>
         </form>
 
+
+        {% set months = {
+        '01': 'Januari', '02': 'Februari', '03': 'Maret', '04': 'April',
+        '05': 'Mei', '06': 'Juni', '07': 'Juli', '08': 'Agustus',
+        '09': 'September', '10': 'Oktober', '11': 'November', '12': 'Desember'
+        } %}
 
         <div class="table-responsive">
             <table class="table table-bordered">
                 <thead>
                     <tr>
-                        <th>Date</th>
-                        <th>Total</th>
-                        <th>Upload Time</th>
-                        <th>Actions</th>
+                        <th>Bulan</th>
+                        <th>Tahun</th>
+                        <th>Kategori</th>
+                        <th>Penjualan</th>
+                        <th>Aksi</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for sale in sales_data %}
                     <tr>
-                        <td>{{ sale.date }}</td>
+                        <td>{{ months[sale.date.split('-')[0]] }}</td>
+                        <td>{{ sale.date.split('-')[1] }}</td>
+                        <td>{{ sale.category }}</td>
                         <td>
                             <form method="POST" action="{{ url_for('edit_total', id=sale.id) }}" class="d-inline">
-                                <input type="number" step="0.01" name="total" value="{{ sale.total }}"
+                                <input type="number" name="total" value="{{ sale.total|int }}"
                                     class="form-control form-control-sm" required>
                         </td>
-                        <td>{{ sale.upload_time }}</td>
                         <td>
                             <button type="submit" class="btn btn-primary btn-sm">Update</button>
                             </form>
@@ -159,6 +169,8 @@
                 </tbody>
             </table>
         </div>
+
+
 
         <nav aria-label="Page navigation">
             <ul class="pagination justify-content-center flex-wrap">
@@ -191,13 +203,16 @@
 
         {% with messages = get_flashed_messages() %}
         {% if messages %}
-        <div class="alert alert-info mt-3">
+        <div class="alert alert-info mt-3 alert-dismissible fade show" role="alert">
             {% for message in messages %}
             <p>{{ message }}</p>
             {% endfor %}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         {% endif %}
         {% endwith %}
+
+
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.0.2/js/bootstrap.bundle.min.js"></script>

@@ -16,6 +16,7 @@ from os import environ
 environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from tensorflow.keras.losses import Huber
 
+
 import locale
 locale.setlocale(locale.LC_TIME, 'id_ID')
 
@@ -26,18 +27,20 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/skripsi
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-class Sales(db.Model):
-    __tablename__ = 'sales'
-    id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.String(7), nullable=False) 
-    total = db.Column(db.Float, nullable=False)
-    upload_time = db.Column(db.DateTime, nullable=True, default=datetime.utcnow)
-    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
-
 class Categories(db.Model):
     __tablename__ = 'categories'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
+    sales = db.relationship('Sales', backref='category', lazy=True) 
+
+class Sales(db.Model):
+    __tablename__ = 'sales'
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.String(7), nullable=False)  
+    total = db.Column(db.Float, nullable=False)
+    upload_time = db.Column(db.DateTime, nullable=True)
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)  
+
 
 with app.app_context():
     db.create_all()
@@ -108,14 +111,23 @@ def load_old_data(product_type):
 
 def save_monthly_data(df, category_id):
     print("Saving data to database:")
-    print(df.head())  
+    print(df.head())
+    
+    upload_timestamp = datetime.now()
 
     for index, row in df.iterrows():
         existing_record = Sales.query.filter_by(category_id=category_id, date=row['date']).first()
         if existing_record:
             existing_record.total = row['total']
+            existing_record.upload_time = upload_timestamp  
         else:
-            new_record = Sales(category_id=category_id, date=row['date'], total=row['total'])
+
+            new_record = Sales(
+                category_id=category_id,
+                date=row['date'],
+                total=row['total'],
+                upload_time=upload_timestamp  
+            )
             db.session.add(new_record)
     
     db.session.commit()
@@ -132,7 +144,7 @@ def create_dataset(dataset, look_back=1):
 def record_upload_time(category):
     pass
 
-def create_plot(product_type):
+def create_plot(product_type, year=None):
     plt.figure(figsize=(15, 6))
 
     df_selected = load_old_data(product_type)
@@ -142,6 +154,11 @@ def create_plot(product_type):
 
     df_selected['date'] = pd.to_datetime(df_selected['date'], format='%m-%Y', errors='coerce')
     df_selected = df_selected.sort_values(by='date')
+
+    available_years = df_selected['date'].dt.year.dropna().unique()
+
+    if year:
+        df_selected = df_selected[df_selected['date'].dt.year == int(year)]
 
     plt.plot(df_selected['date'], df_selected['total'], marker='o')
     plt.title(f'Penjualan {product_type.replace("_", " ").title()}')
@@ -164,17 +181,32 @@ def create_plot(product_type):
 
     plot_url = b64encode(img.getvalue()).decode('utf8')
 
-    start_date = df_selected['date'].min().strftime('%B %Y')
-    end_date = df_selected['date'].max().strftime('%B %Y')
-    date_range = f'Penjualan per tanggal {start_date} sampai dengan {end_date}'
-    
-    return plot_url, date_range
+    if not df_selected.empty:
+        start_date = df_selected['date'].min().strftime('%B %Y')
+        end_date = df_selected['date'].max().strftime('%B %Y')
+        date_range = f'Penjualan per tanggal {start_date} sampai dengan {end_date}'
+    else:
+        date_range = "Tidak ada data untuk tahun yang dipilih."
+
+    return plot_url, date_range, available_years
 
 
-@app.route('/')
+@app.route('/beranda')
 def index():
-    plot_url, date_range = create_plot('lada_halus')
-    return render_template('index.html', plot_url=plot_url, date_range=date_range)
+    product_type = request.args.get('product', 'lada_halus')  
+    selected_year = request.args.get('year')  
+
+    plot_url, date_range, available_years = create_plot(product_type, selected_year)
+
+    return render_template(
+        'index.html',
+        plot_url=plot_url,
+        date_range=date_range,
+        available_years=available_years,
+        selected_product=product_type,
+        selected_year=selected_year
+    )
+
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
@@ -185,40 +217,34 @@ def upload():
         if category not in ['lada_halus', 'lada_butir']:
             flash('Kategori tidak valid', 'danger')
             return redirect('/upload')
+        
         if not file or not file.filename.endswith('.xlsx'):
             flash('File harus berformat .xlsx', 'danger')
             return redirect('/upload')
 
         try:
             df_new = pd.read_excel(file)
-
-            print("Data from uploaded Excel:")
-            print(df_new.head())  
-            print("Column names in uploaded Excel:", df_new.columns.tolist())  
-
             df_new.columns = df_new.columns.str.strip()
 
-            if 'Tanggal' not in df_new.columns:
-                flash("Kolom 'Tanggal' tidak ditemukan di file.", 'danger')
-                return redirect('/upload')
-            if 'Total' not in df_new.columns:
-                flash("Kolom 'Total' tidak ditemukan di file.", 'danger')
+            if 'Tanggal' not in df_new.columns or 'Total' not in df_new.columns:
+                flash("Kolom 'Tanggal' dan 'Total' harus ada di file.", 'danger')
                 return redirect('/upload')
 
             df_new.rename(columns={'Tanggal': 'date', 'Total': 'total'}, inplace=True)
-            print("Data types of columns:")
-            print(df_new.dtypes)
-
             df_new_monthly = convert_daily_to_monthly(df_new)
 
             category_obj = Categories.query.filter_by(name=category).first()
             if not category_obj:
                 flash(f"Kategori '{category}' tidak ditemukan.", 'danger')
                 return redirect('/upload')
-
             category_id = category_obj.id
 
             df_old = load_old_data(category)
+            
+            duplicate_dates = df_new_monthly[df_new_monthly['date'].isin(df_old['date'])]
+            if not duplicate_dates.empty:
+                flash("Data untuk bulan tersebut sudah ada di database!", 'danger')
+                return redirect('/upload')
             
             df_combined = pd.concat([pd.DataFrame(df_old), df_new_monthly]).drop_duplicates(subset=['date'], keep='last')
 
@@ -227,11 +253,13 @@ def upload():
 
             flash(f'Data {category.replace("_", " ")} berhasil diunggah dan digabungkan dengan data lama!', 'success')
             return redirect('/upload')
+        
         except Exception as e:
             flash(f'Terjadi kesalahan: {e}', 'danger')
             return redirect('/upload')
 
     return render_template('upload.html')
+
 
 @app.route('/about')
 def about():
@@ -264,7 +292,6 @@ def predict():
             learning_rate = 0.001
 
             X, y = create_dataset(scaled_data, look_back)
-
             X = np.reshape(X, (X.shape[0], X.shape[1], 1))
 
             train_size = int(len(X) * 0.7)
@@ -292,7 +319,6 @@ def predict():
             model.compile(optimizer=optimizer, loss=Huber())
 
             early_stopping = EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
-
             history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=epoch,
                                 batch_size=batch_size, verbose=2, callbacks=[early_stopping])
 
@@ -351,8 +377,18 @@ def predict():
             combined_dates = np.concatenate([train_dates, val_dates, test_dates, future_dates])
             combined_actual = np.concatenate([y_train_rescaled.flatten(), y_val_rescaled.flatten(), y_test_rescaled.flatten(), [np.nan] * n_months])
             combined_predictions = np.concatenate([train_predictions.flatten(), val_predictions.flatten(), test_predictions.flatten(), future_predictions.flatten()])
+
             plt.plot(combined_dates, combined_actual, label='Aktual', color='black', linestyle='-', marker='o')
+            
+            for date, value in zip(combined_dates, combined_actual):
+                if not np.isnan(value): 
+                    plt.text(date, value, f'{int(value)}', ha='center', va='bottom', fontsize=12, color='black')
+
             plt.plot(combined_dates, combined_predictions, label='Prediksi', color='orange', linestyle='--', marker='x')
+
+            for date, value in zip(future_dates, future_predictions.flatten()):
+                plt.text(date, value, f'{int(value)}', ha='center', va='bottom', fontsize=12, color='orange')
+
             plt.gca().xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator())
             plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%m-%Y'))
             plt.xlabel('Tanggal')
@@ -361,6 +397,7 @@ def predict():
             plt.legend()
             plt.xticks(rotation=45)
             plt.tight_layout()
+
             img = BytesIO()
             plt.savefig(img, format='png', dpi=100)
             img.seek(0)
@@ -393,37 +430,59 @@ def predict():
     return render_template('predict.html')
 
 
-
 def get_sales_data(category, page, items_per_page):
-    offset = (page - 1) * items_per_page
-    category_id = None
-    if category: 
-        category_obj = Categories.query.filter_by(name=category).first()
-        if category_obj:
-            category_id = category_obj.id
+    query = db.session.query(Sales).join(Categories)  
 
-    query = Sales.query
-    if category_id:
-        query = query.filter_by(category_id=category_id)
+    if category:
+        query = query.filter(Categories.name == category)
 
-    sales_data = query.offset(offset).limit(items_per_page).all()
-    total_count = Sales.query.filter_by(category_id=category_id).count() if category_id else Sales.query.count()
-    return sales_data, total_count
+    if items_per_page is None or items_per_page == 'all':
+        sales_data = query.all()
+        total_count = len(sales_data)
+    else:
+        offset = (page - 1) * items_per_page
+        sales_data = query.offset(offset).limit(items_per_page).all()
+        total_count = query.count()
 
+    formatted_sales_data = []
+    for sale in sales_data:
+        formatted_sales_data.append({
+            'id': sale.id,
+            'date': sale.date,
+            'total': sale.total,
+            'upload_time': sale.upload_time,
+            'category': sale.category.name if sale.category else 'Unknown'  
+        })
+
+    return formatted_sales_data, total_count
 
 
 @app.route('/delete', methods=['GET'])
 def delete():
     category = request.args.get('category', default=None)
-    items_per_page = request.args.get('items_per_page', default=5, type=int)
+    items_per_page = request.args.get('items_per_page', default='5')  
     page = request.args.get('page', default=1, type=int)
+
+    if items_per_page == 'all':
+        items_per_page = None  
+    else:
+        items_per_page = int(items_per_page) 
 
     sales_data, total_count = get_sales_data(category, page, items_per_page)
 
-    total_pages = (total_count + items_per_page - 1) // items_per_page  
+    if items_per_page is None:
+        total_pages = 1
+    else:
+        total_pages = (total_count + items_per_page - 1) // items_per_page
 
-    return render_template('delete.html', sales_data=sales_data, selected_category=category, items_per_page=items_per_page, page=page, total_pages=total_pages)
-
+    return render_template(
+        'delete.html',
+        sales_data=sales_data,
+        selected_category=category,
+        items_per_page=items_per_page,
+        page=page,
+        total_pages=total_pages
+    )
 
 
 @app.route('/edit/<int:id>', methods=['POST'])
