@@ -81,6 +81,14 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/delete" style="color: #e0e0e0;">Lihat Data</a>
                     </li>
+                    <li class="nav-item">
+                        <form action="{{ url_for('logout') }}" method="POST" style="display: inline;">
+                            <button type="submit" class="nav-link"
+                                style="background: none; border: none; color: #e0e0e0; cursor: pointer;">
+                                Logout
+                            </button>
+                        </form>
+                    </li>
                 </ul>
             </div>
         </div>

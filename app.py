@@ -1,5 +1,6 @@
-from flask import Flask, render_template, request, redirect, flash, jsonify, url_for
+from flask import Flask, render_template, request, redirect, flash, jsonify, url_for, session
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 from io import BytesIO
 from base64 import b64encode
 import pandas as pd
@@ -15,6 +16,9 @@ from datetime import datetime
 from os import environ
 environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 from tensorflow.keras.losses import Huber
+from flask_bcrypt import Bcrypt
+from flask_migrate import Migrate
+from flask_login import login_user, current_user, LoginManager, UserMixin, login_required, logout_user
 
 
 import locale
@@ -22,10 +26,27 @@ locale.setlocale(locale.LC_TIME, 'id_ID')
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/skripsi_tes'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
+bcrypt = Bcrypt(app)
+migrate = Migrate(app, db)
+
+class User(db.Model, UserMixin):
+    __tablename__ = 'user'  
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True) 
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+    is_approved = db.Column(db.Boolean, default=False) 
+    role = db.Column(db.String(20), default='user') 
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 class Categories(db.Model):
     __tablename__ = 'categories'
@@ -41,10 +62,8 @@ class Sales(db.Model):
     upload_time = db.Column(db.DateTime, nullable=True)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)  
 
-
 with app.app_context():
     db.create_all()
-
 
 def read_and_process_data(category):
     category_obj = Categories.query.filter_by(name=category).first()
@@ -132,8 +151,6 @@ def save_monthly_data(df, category_id):
     
     db.session.commit()
 
-
-
 def create_dataset(dataset, look_back=1):
     X, Y = [], []
     for i in range(len(dataset) - look_back):
@@ -190,11 +207,18 @@ def create_plot(product_type, year=None):
 
     return plot_url, date_range, available_years
 
+@app.route('/')
+def home():
+    if 'user_id' in session: 
+        return redirect(url_for('beranda')) 
+    return redirect(url_for('login'))  
+
+
 
 @app.route('/beranda')
-def index():
+def beranda():
     product_type = request.args.get('product', 'lada_halus')  
-    selected_year = request.args.get('year')  
+    selected_year = request.args.get('year') 
 
     plot_url, date_range, available_years = create_plot(product_type, selected_year)
 
@@ -206,6 +230,217 @@ def index():
         selected_product=product_type,
         selected_year=selected_year
     )
+    
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        email = request.form['email']
+        username = request.form['username']
+        password = request.form['password']
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')  
+
+        user_exists = User.query.filter_by(username=username).first()
+        if user_exists:
+            flash('Username already exists, try another one!', 'danger')
+            return redirect(url_for('register'))
+
+        user_exists_email = User.query.filter_by(email=email).first()
+        if user_exists_email:
+            flash('Email is already registered, try another one!', 'danger')
+            return redirect(url_for('register'))
+
+        new_user = User(email=email, username=username, password=hashed_password, is_approved=False, role='user')
+        db.session.add(new_user)
+        db.session.commit()
+
+        flash('Registration successful, please wait for admin approval!', 'info')
+        return redirect(url_for('login'))
+
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+
+        user = User.query.filter_by(username=username).first()
+
+        if user and bcrypt.check_password_hash(user.password, password): 
+            if not user.is_approved:
+                flash('Your account is awaiting admin approval.', 'warning')
+                return redirect(url_for('login'))
+
+            session['user_id'] = user.id 
+            login_user(user)
+            flash('Login successful!', 'success')
+
+            if user.role == 'admin':
+                return redirect(url_for('admin_dashboard'))  
+            else:
+                return redirect(url_for('beranda'))  
+
+        else:
+            flash('Username or password is incorrect.', 'danger')
+
+    return render_template('login.html')
+
+
+@app.route('/logout', methods=['POST'])
+@login_required
+def logout():
+    if current_user.role == 'admin':
+        logout_user()  
+        session.clear()  
+        flash('Admin logged out successfully.', 'success')
+        return redirect(url_for('admin_login')) 
+
+    elif current_user.role == 'user':
+        logout_user()  
+        session.clear()  
+        flash('Anda sudah logout.', 'success')
+        return redirect(url_for('login'))  
+
+    return redirect(url_for('login'))
+
+
+@app.route('/admin/dashboard')
+@login_required  
+def admin_dashboard():
+    if not current_user.is_authenticated or current_user.role != 'admin':
+        flash('Access denied. Admin access only.', 'danger')
+        return redirect(url_for('admin_login'))  
+
+    approved_users = User.query.filter_by(is_approved=True).all()
+    pending_users = User.query.filter_by(is_approved=False).all()
+    approved_count = len(approved_users)
+    pending_count = len(pending_users)
+
+    return render_template('admin_dashboard.html', 
+                           approved_users=approved_users, 
+                           pending_users=pending_users,
+                           approved_count=approved_count,
+                           pending_count=pending_count)
+
+
+@app.route('/admin/dashboard_data', methods=['GET'])
+@login_required
+def get_dashboard_data():
+    if not current_user.is_authenticated or current_user.role != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+
+    approved_users = User.query.filter_by(is_approved=True).all()
+    pending_users = User.query.filter_by(is_approved=False).all()
+    approved_count = len(approved_users)
+    pending_count = len(pending_users)
+
+    data = {
+        'approved_count': approved_count,
+        'pending_count': pending_count,
+        'approved_users': [{'id': u.id, 'username': u.username, 'email': u.email, 'role': u.role} for u in approved_users],
+        'pending_users': [{'id': u.id, 'username': u.username, 'email': u.email, 'role': u.role} for u in pending_users]
+    }
+    return jsonify(data)
+
+    
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    if current_user.is_authenticated:
+        if current_user.role == 'admin':
+            return redirect(url_for('admin_dashboard')) 
+        else:
+            flash('You are already logged in as a user!', 'warning')
+            return redirect(url_for('index'))  
+
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+        
+        user = User.query.filter_by(email=email).first()
+
+        if user and user.role == 'admin' and bcrypt.check_password_hash(user.password, password):
+            login_user(user) 
+            flash('Admin logged in successfully!', 'success')
+            return redirect(url_for('admin_dashboard')) 
+        else:
+            flash('Invalid credentials, please try again.', 'danger') 
+
+    return render_template('admin_login.html')
+
+
+@app.route('/admin/register', methods=['GET', 'POST'])
+@login_required  
+def admin_register():
+    if not current_user.is_authenticated or current_user.role != 'admin':
+        flash('Access denied. Only admins can register new admins.', 'danger')
+        return redirect(url_for('index'))  
+
+    if request.method == 'POST':
+        email = request.form['email']
+        username = request.form['username']
+        password = request.form['password']
+        
+        if not email or not username or not password:
+            flash('All fields are required!', 'danger')
+            return redirect(url_for('admin_register'))
+
+        hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')  
+
+        try:
+            existing_user = User.query.filter((User.username == username) | (User.email == email)).first()
+            if existing_user:
+                flash('Username or email already exists. Please use a different one.', 'danger')
+                return redirect(url_for('admin_register'))
+
+            new_admin = User(email=email, username=username, password=hashed_password, is_approved=True, role='admin')
+            db.session.add(new_admin)
+            db.session.commit()
+
+            flash('New admin registered successfully!', 'success')
+            return redirect(url_for('admin_dashboard')) 
+
+        except Exception as e:
+            db.session.rollback() 
+            flash('An error occurred while registering the new admin. Please try again.', 'danger')
+            print(f"Error: {e}") 
+
+    return render_template('admin_register.html')
+
+@app.route('/admin/approve_user/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def approve_user(user_id):
+    if current_user.role != 'admin':
+        flash('Access denied. You are not an admin.', 'danger')
+        return redirect(url_for('login'))
+
+    user = User.query.get(user_id)
+    if user:
+        user.is_approved = True
+        db.session.commit()
+        flash(f'User {user.username} has been approved.', 'success')
+    else:
+        flash('User not found.', 'danger')
+
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/delete_user/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def delete_user(user_id):
+    if current_user.role != 'admin':
+        flash('Access denied. You are not an admin.', 'danger')
+        return redirect(url_for('login')) 
+
+    user = User.query.get(user_id)
+    if user:
+        db.session.delete(user)
+        db.session.commit()
+        flash(f'User {user.username} has been deleted.', 'success')
+    else:
+        flash('User not found.', 'danger')
+
+    return redirect(url_for('admin_dashboard'))
+
 
 
 @app.route('/upload', methods=['GET', 'POST'])
@@ -271,23 +506,22 @@ def penjualan():
     plot_url, date_range = create_plot(product_type)
     return render_template('index.html', plot_url=plot_url, selected_product=product_type, date_range=date_range)
 
+
 @app.route('/predict', methods=['GET', 'POST'])
 def predict():
     if request.method == 'POST':
         category = request.form.get('category')
-        n_months = int(request.form.get('n_months'))
+        n_months = int(request.form.get('n_months'))  # Number of months to forecast
 
         try:
             df = read_and_process_data(category)
-
             scaler = MinMaxScaler(feature_range=(0, 1))
             scaled_data = scaler.fit_transform(df['Total'].values.reshape(-1, 1))
 
-            units_1 = 128  
+            units_1 = 128
             units_2 = 64
             batch_size = 16
-            look_back = 1 
-
+            look_back = 1
             epoch = 100
             learning_rate = 0.001
 
@@ -301,18 +535,10 @@ def predict():
             X_test, y_test = X[train_size + val_size:], y[train_size + val_size:]
 
             model = Sequential()
-
-            if category == 'lada_butir':
-                model.add(LSTM(units_1, return_sequences=True, input_shape=(look_back, 1)))
-                model.add(Dropout(0.2))
-                model.add(LSTM(units_2)) 
-                model.add(Dropout(0.2))
-            else:
-                model.add(LSTM(units_1, return_sequences=True, input_shape=(look_back, 1)))
-                model.add(Dropout(0.2))
-                model.add(LSTM(units_2))
-                model.add(Dropout(0.2))
-
+            model.add(LSTM(units_1, return_sequences=True, input_shape=(look_back, 1)))
+            model.add(Dropout(0.2))
+            model.add(LSTM(units_2))
+            model.add(Dropout(0.2))
             model.add(Dense(1))
 
             optimizer = Adam(learning_rate=learning_rate)
@@ -322,25 +548,96 @@ def predict():
             history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=epoch,
                                 batch_size=batch_size, verbose=2, callbacks=[early_stopping])
 
-            epochs_run = len(history.history['loss'])
-
-            train_predictions = model.predict(X_train)
-            val_predictions = model.predict(X_val)
-            test_predictions = model.predict(X_test)
-
-            train_predictions = scaler.inverse_transform(train_predictions)
-            val_predictions = scaler.inverse_transform(val_predictions)
-            test_predictions = scaler.inverse_transform(test_predictions)
+            train_predictions = scaler.inverse_transform(model.predict(X_train))
+            val_predictions = scaler.inverse_transform(model.predict(X_val))
+            test_predictions = scaler.inverse_transform(model.predict(X_test))
 
             y_train_rescaled = scaler.inverse_transform(y_train.reshape(-1, 1))
             y_val_rescaled = scaler.inverse_transform(y_val.reshape(-1, 1))
             y_test_rescaled = scaler.inverse_transform(y_test.reshape(-1, 1))
 
+            train_dates = df.index[look_back:train_size + look_back]
+            val_dates = df.index[train_size + look_back:train_size + val_size + look_back]
+            test_dates = df.index[train_size + val_size + look_back:]
+
+            last_data_point = scaled_data[-look_back:].reshape(1, look_back, 1)
+            future_predictions = []
+            for i in range(n_months):
+                future_pred = model.predict(last_data_point)
+                print(f'Future prediction {i+1}: {future_pred[0][0]}')  
+                future_predictions.append(future_pred[0][0])
+                last_data_point = np.roll(last_data_point, -1, axis=1)  
+                last_data_point[0, -1, 0] = future_pred[0, 0]  
+
+            future_predictions_rescaled = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
+            future_predictions_rescaled = future_predictions_rescaled.flatten()
+
+            future_dates_start = df.index[-1] + pd.DateOffset(months=1)
+            future_dates = pd.date_range(start=future_dates_start.replace(day=1), periods=n_months, freq='MS')
+
+            print(f'Last date in the dataset: {df.index[-1]}')
+            print(f'Future dates: {future_dates}')
+            print(f'Future predictions: {future_predictions_rescaled}')
+            
+            print(f'Future Dates shape: {future_dates.shape}')
+            print(f'Future Predictions shape: {future_predictions_rescaled.shape}')
+            print(f'prediksi di tanggal {future_dates[0]} adalah {future_predictions_rescaled[0]}')
+            print(future_dates.min())
+
+            fig, axs = plt.subplots(3, 1, figsize=(15, 18))
+        
+            axs[0].plot(train_dates, y_train_rescaled, label='Aktual', color='black', linestyle='-', marker='o')
+            axs[0].plot(train_dates, train_predictions, label='Prediksi', color='orange', linestyle='--', marker='x')
+            axs[0].set_title('Data Training')
+            axs[0].set_xlabel('Tanggal')
+            axs[0].set_ylabel('Total')
+            axs[0].legend()
+            axs[0].grid(True)
+
+            axs[1].plot(val_dates, y_val_rescaled, label='Aktual', color='black', linestyle='-', marker='o')
+            axs[1].plot(val_dates, val_predictions, label='Prediksi', color='orange', linestyle='--', marker='x')
+            axs[1].set_title('Data Validation')
+            axs[1].set_xlabel('Tanggal')
+            axs[1].set_ylabel('Total')
+            axs[1].legend()
+            axs[1].grid(True)
+
+
+            extended_dates = np.concatenate([test_dates, future_dates])
+            extended_predictions = np.concatenate([test_predictions.flatten(), future_predictions_rescaled.flatten()])
+
+            axs[2].set_xlim([min(test_dates.min(), future_dates.min()), future_dates.max()])
+            axs[2].plot(test_dates, y_test_rescaled, label='Aktual', color='black', linestyle='-', marker='o')
+            axs[2].plot(test_dates, test_predictions.flatten(), color='orange', linestyle='--', marker='x', label='Prediksi (Testing)')
+            axs[2].plot(test_dates[-1:], test_predictions[-1:], color='orange', linestyle='--', marker='x') 
+            axs[2].plot(extended_dates[-len(future_dates)-1:], extended_predictions[-len(future_predictions_rescaled)-1:], color='green', linestyle='--', marker='s', label='Prediksi Masa Depan')
+            axs[2].set_title('Data Testing dan Prediksi Masa Depan')
+            axs[2].set_xlabel('Tanggal')
+            axs[2].set_ylabel('Total')
+
+            for date, value in zip(test_dates, test_predictions.flatten()):
+                axs[2].text(date, value, f'{int(value)}', ha='center', va='bottom', fontsize=12, color='orange')
+
+            for date, value in zip(future_dates, future_predictions_rescaled.flatten()):
+                axs[2].text(date, value, f'{int(value)}', ha='center', va='bottom', fontsize=12, color='green')
+
+            axs[2].legend()
+            axs[2].grid(True)
+
+            plt.tight_layout()
+
+            img = BytesIO()
+            plt.savefig(img, format='png', dpi=100)
+            img.seek(0)
+            plt.close()
+
+            plot_url = b64encode(img.getvalue()).decode('utf8')
+            
             train_mae = mean_absolute_error(y_train_rescaled, train_predictions)
             train_mse = mean_squared_error(y_train_rescaled, train_predictions)
             train_rmse = np.sqrt(train_mse)
             train_mape = mean_absolute_percentage_error(y_train_rescaled, train_predictions)
-            
+
             val_mae = mean_absolute_error(y_val_rescaled, val_predictions)
             val_mse = mean_squared_error(y_val_rescaled, val_predictions)
             val_rmse = np.sqrt(val_mse)
@@ -350,60 +647,6 @@ def predict():
             test_mse = mean_squared_error(y_test_rescaled, test_predictions)
             test_rmse = np.sqrt(test_mse)
             test_mape = mean_absolute_percentage_error(y_test_rescaled, test_predictions)
-
-            train_dates = df.index[look_back:train_size + look_back]
-            val_dates = df.index[train_size + look_back:train_size + val_size + look_back]
-            test_dates = df.index[train_size + val_size + look_back:]
-
-            predicted_df = pd.DataFrame({
-                'Tanggal': np.concatenate([train_dates, val_dates, test_dates]),
-                'Aktual': np.concatenate([y_train_rescaled.flatten(), y_val_rescaled.flatten(), y_test_rescaled.flatten()]),
-                'Prediksi': np.concatenate([train_predictions.flatten(), val_predictions.flatten(), test_predictions.flatten()])
-            })
-
-            future_predictions = []
-            last_data = scaled_data[-look_back:]
-            for _ in range(n_months):
-                prediction = model.predict(last_data.reshape(1, look_back, 1))
-                future_predictions.append(prediction[0, 0])
-                last_data = np.append(last_data[1:], prediction)
-
-            future_predictions = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
-
-            last_date = df.index[-1]
-            future_dates = pd.date_range(last_date, periods=n_months + 1, freq='M')[1:]
-
-            plt.figure(figsize=(15, 6))
-            combined_dates = np.concatenate([train_dates, val_dates, test_dates, future_dates])
-            combined_actual = np.concatenate([y_train_rescaled.flatten(), y_val_rescaled.flatten(), y_test_rescaled.flatten(), [np.nan] * n_months])
-            combined_predictions = np.concatenate([train_predictions.flatten(), val_predictions.flatten(), test_predictions.flatten(), future_predictions.flatten()])
-
-            plt.plot(combined_dates, combined_actual, label='Aktual', color='black', linestyle='-', marker='o')
-            
-            for date, value in zip(combined_dates, combined_actual):
-                if not np.isnan(value): 
-                    plt.text(date, value, f'{int(value)}', ha='center', va='bottom', fontsize=12, color='black')
-
-            plt.plot(combined_dates, combined_predictions, label='Prediksi', color='orange', linestyle='--', marker='x')
-
-            for date, value in zip(future_dates, future_predictions.flatten()):
-                plt.text(date, value, f'{int(value)}', ha='center', va='bottom', fontsize=12, color='orange')
-
-            plt.gca().xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator())
-            plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%m-%Y'))
-            plt.xlabel('Tanggal')
-            plt.ylabel('Total')
-            plt.grid(True)
-            plt.legend()
-            plt.xticks(rotation=45)
-            plt.tight_layout()
-
-            img = BytesIO()
-            plt.savefig(img, format='png', dpi=100)
-            img.seek(0)
-            plt.close()
-
-            plot_url = b64encode(img.getvalue()).decode('utf8')
 
             return jsonify({
                 'plot_url': plot_url,
@@ -419,15 +662,15 @@ def predict():
                 'test_mse': test_mse,
                 'test_rmse': test_rmse,
                 'test_mape': test_mape,
-                'future_predictions': [{'Tanggal': str(date), 'Prediksi': float(pred)} for date, pred in zip(future_dates, future_predictions)]
             })
 
         except Exception as e:
-            print(f'An error occurred: {e}')  
+            print(f'An error occurred: {e}')
             flash(f'An error occurred: {e}', 'danger')
             return redirect('/')
 
     return render_template('predict.html')
+
 
 
 def get_sales_data(category, page, items_per_page):

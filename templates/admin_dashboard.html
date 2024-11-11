@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark" id="navbar">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Admin Dashboard</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <form action="{{ url_for('logout') }}" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-outline-light nav-link" id="logout-btn">Logout</button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5" id="dashboard">
+        <h2>Selamat datang di dashboard Admin</h2>
+        <p>Total user yang sudah diterima: <span id="approved-count">{{ approved_count }}</span></p>
+        <p>Total user yang di pending: <span id="pending-count">{{ pending_count }}</span></p>
+
+        <h3>User yang Diterima</h3>
+        <table class="table table-bordered" id="approved-users-table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                </tr>
+            </thead>
+            <tbody id="approved-users">
+                {% for user in approved_users %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>{{ user.role }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <h3>User yang Pending</h3>
+        <table class="table table-bordered" id="pending-users-table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="pending-users">
+                {% for user in pending_users %}
+                <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>{{ user.role }}</td>
+                    <td>
+                        <a href="{{ url_for('approve_user', user_id=user.id) }}" class="btn btn-success">Approve</a>
+                        <a href="{{ url_for('delete_user', user_id=user.id) }}" class="btn btn-danger">Delete</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"></script>
+
+    <script>
+        function fetchDashboardData() {
+            fetch("/admin/dashboard_data")
+                .then((response) => response.json())
+                .then((data) => {
+                    document.getElementById("approved-count").textContent =
+                        data.approved_count;
+                    document.getElementById("pending-count").textContent =
+                        data.pending_count;
+
+                    const approvedUsersTable = document.getElementById("approved-users");
+                    approvedUsersTable.innerHTML = "";
+                    data.approved_users.forEach((user) => {
+                        approvedUsersTable.innerHTML += `
+                    <tr>
+                      <td>${user.username}</td>
+                      <td>${user.email}</td>
+                      <td>${user.role}</td>
+                    </tr>`;
+                    });
+
+                    const pendingUsersTable = document.getElementById("pending-users");
+                    pendingUsersTable.innerHTML = "";
+                    data.pending_users.forEach((user) => {
+                        pendingUsersTable.innerHTML += `
+                    <tr>
+                      <td>${user.username}</td>
+                      <td>${user.email}</td>
+                      <td>${user.role}</td>
+                      <td>
+                        <a href="/approve_user/${user.id}" class="btn btn-success">Approve</a>
+                        <a href="/delete_user/${user.id}" class="btn btn-danger">Delete</a>
+                      </td>
+                    </tr>`;
+                    });
+                })
+                .catch((error) => console.error("Error fetching data:", error));
+        }
+        setInterval(fetchDashboardData, 5000);
+    </script>
+</body>
+
+</html>

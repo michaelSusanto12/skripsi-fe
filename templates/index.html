@@ -121,6 +121,14 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/delete" style="color: #e0e0e0;">Lihat Data</a>
                     </li>
+                    <li class="nav-item">
+                        <form action="{{ url_for('logout') }}" method="POST" style="display: inline;">
+                            <button type="submit" class="nav-link"
+                                style="background: none; border: none; color: #e0e0e0; cursor: pointer;">
+                                Logout
+                            </button>
+                        </form>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -129,7 +137,7 @@
     <div class="container mt-5">
         <h1 class="text-center">Penjualan Produk</h1>
 
-        <form method="get" action="/">
+        <form method="get" action="{{ url_for('beranda') }}">
             <div class="form-group row justify-content-center">
                 <label for="product" class="col-sm-2 col-form-label">Pilih Kategori:</label>
                 <div class="col-sm-4">

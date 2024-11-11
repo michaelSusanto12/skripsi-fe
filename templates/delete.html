@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit and Delete Data</title>
+    <title>View and Delete Data</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.0.2/css/bootstrap.min.css" rel="stylesheet">
     <style>
         html,
@@ -47,7 +47,6 @@
                 width: 100% !important;
             }
         }
-
 
         @media (max-width: 768px) {
             .btn-primary {
@@ -92,13 +91,21 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/delete" style="color: #fae8b4;">Lihat Data</a>
                     </li>
+                    <li class="nav-item">
+                        <form action="{{ url_for('logout') }}" method="POST" style="display: inline;">
+                            <button type="submit" class="nav-link"
+                                style="background: none; border: none; color: #e0e0e0; cursor: pointer;">
+                                Logout
+                            </button>
+                        </form>
+                    </li>
                 </ul>
             </div>
         </div>
     </nav>
 
     <div class="container mt-4">
-        <h2 class="text-center">Edit dan Menghapus Data Penjualan</h2>
+        <h2 class="text-center">Data Penjualan</h2>
 
         <form method="GET" action="{{ url_for('delete') }}" class="mb-3">
             <div class="row mb-2">
@@ -128,7 +135,6 @@
             </div>
         </form>
 
-
         {% set months = {
         '01': 'Januari', '02': 'Februari', '03': 'Maret', '04': 'April',
         '05': 'Mei', '06': 'Juni', '07': 'Juli', '08': 'Agustus',
@@ -152,14 +158,8 @@
                         <td>{{ months[sale.date.split('-')[0]] }}</td>
                         <td>{{ sale.date.split('-')[1] }}</td>
                         <td>{{ sale.category }}</td>
+                        <td>{{ sale.total|int }}</td>
                         <td>
-                            <form method="POST" action="{{ url_for('edit_total', id=sale.id) }}" class="d-inline">
-                                <input type="number" name="total" value="{{ sale.total|int }}"
-                                    class="form-control form-control-sm" required>
-                        </td>
-                        <td>
-                            <button type="submit" class="btn btn-primary btn-sm">Update</button>
-                            </form>
                             <form method="POST" action="{{ url_for('delete_data', id=sale.id) }}" class="d-inline">
                                 <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                             </form>
@@ -169,8 +169,6 @@
                 </tbody>
             </table>
         </div>
-
-
 
         <nav aria-label="Page navigation">
             <ul class="pagination justify-content-center flex-wrap">
@@ -211,7 +209,6 @@
         </div>
         {% endif %}
         {% endwith %}
-
 
     </div>
 
