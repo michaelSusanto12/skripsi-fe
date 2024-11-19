@@ -19,7 +19,7 @@ from tensorflow.keras.losses import Huber
 from flask_bcrypt import Bcrypt
 from flask_migrate import Migrate
 from flask_login import login_user, current_user, LoginManager, UserMixin, login_required, logout_user
-
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 
 import locale
 locale.setlocale(locale.LC_TIME, 'id_ID')
@@ -317,7 +317,7 @@ def admin_dashboard():
     approved_count = len(approved_users)
     pending_count = len(pending_users)
 
-    return render_template('admin_dashboard.html', 
+    return render_template('admin/admin_dashboard.html', 
                            approved_users=approved_users, 
                            pending_users=pending_users,
                            approved_count=approved_count,
@@ -341,7 +341,10 @@ def get_dashboard_data():
         'approved_users': [{'id': u.id, 'username': u.username, 'email': u.email, 'role': u.role} for u in approved_users],
         'pending_users': [{'id': u.id, 'username': u.username, 'email': u.email, 'role': u.role} for u in pending_users]
     }
+
+
     return jsonify(data)
+
 
     
 @app.route('/admin/login', methods=['GET', 'POST'])
@@ -351,7 +354,7 @@ def admin_login():
             return redirect(url_for('admin_dashboard')) 
         else:
             flash('You are already logged in as a user!', 'warning')
-            return redirect(url_for('index'))  
+            return render_template('index.html') 
 
     if request.method == 'POST':
         email = request.form['email']
@@ -366,7 +369,7 @@ def admin_login():
         else:
             flash('Invalid credentials, please try again.', 'danger') 
 
-    return render_template('admin_login.html')
+    return render_template('admin/admin_login.html')
 
 
 @app.route('/admin/register', methods=['GET', 'POST'])
@@ -405,7 +408,7 @@ def admin_register():
             flash('An error occurred while registering the new admin. Please try again.', 'danger')
             print(f"Error: {e}") 
 
-    return render_template('admin_register.html')
+    return render_template('admin/admin_register.html')
 
 @app.route('/admin/approve_user/<int:user_id>', methods=['GET', 'POST'])
 @login_required
@@ -422,7 +425,7 @@ def approve_user(user_id):
     else:
         flash('User not found.', 'danger')
 
-    return redirect(url_for('admin_dashboard'))
+    return redirect(url_for('admin/admin_dashboard'))
 
 @app.route('/admin/delete_user/<int:user_id>', methods=['GET', 'POST'])
 @login_required
@@ -439,8 +442,79 @@ def delete_user(user_id):
     else:
         flash('User not found.', 'danger')
 
-    return redirect(url_for('admin_dashboard'))
+    return redirect(url_for('admin/admin_dashboard'))
 
+@app.route('/admin/delete_approved_user/<int:user_id>', methods=['POST'])
+@login_required
+def delete_approved_user(user_id):
+    if current_user.role != 'admin':
+        flash('Access denied. You are not an admin.', 'danger')
+        return redirect(url_for('login'))
+
+    user = User.query.get(user_id)
+    if user:
+        db.session.delete(user)
+        db.session.commit()
+        flash('User deleted successfully.', 'success')
+    else:
+        flash('User not found!', 'danger')
+    return redirect(url_for('admin/admin_dashboard'))
+
+@app.route('/admin/admin_list_data', methods=['GET', 'POST'])
+def admin_list_data():
+    category = request.args.get('category', 'lada_halus') 
+    items_per_page = request.args.get('items_per_page', 5)  
+    page = int(request.args.get('page', 1))
+
+    if items_per_page == 'all':
+        items_per_page = None
+    else:
+        items_per_page = int(items_per_page)
+
+    query = Sales.query
+
+    if category:
+        query = query.filter(Sales.category.has(name=category))
+
+    total_sales = query.count()
+    total_pages = (total_sales + (items_per_page - 1)) // items_per_page if items_per_page else 1
+
+    if items_per_page:
+        sales_data = query.paginate(page=page, per_page=items_per_page, error_out=False).items
+    else:
+        sales_data = query.all()
+
+    if request.method == 'POST':
+        action = request.form.get('action')
+        sale_id = request.form.get('sale_id')
+
+        if action == 'delete' and sale_id:
+            sale = Sales.query.get(sale_id)
+            if sale:
+                db.session.delete(sale)
+                db.session.commit()
+                flash('Data berhasil dihapus', 'success')
+            else:
+                flash('Data tidak ditemukan', 'danger')
+            return redirect(url_for('admin_list_data', category=category, page=page, items_per_page=items_per_page))
+
+        elif action == 'edit' and sale_id:
+            sale = Sales.query.get(sale_id)
+            if sale:
+                new_total = request.form.get('total')
+                sale.total = new_total 
+                db.session.commit()
+                flash('Data berhasil diperbarui', 'success')
+            else:
+                flash('Data tidak ditemukan', 'danger')
+            return redirect(url_for('admin_list_data', category=category, page=page, items_per_page=items_per_page))
+
+    return render_template('admin/admin_list_data.html', 
+                           sales_data=sales_data, 
+                           category=category, 
+                           items_per_page=items_per_page, 
+                           page=page, 
+                           total_pages=total_pages)
 
 
 @app.route('/upload', methods=['GET', 'POST'])
@@ -478,9 +552,13 @@ def upload():
             
             duplicate_dates = df_new_monthly[df_new_monthly['date'].isin(df_old['date'])]
             if not duplicate_dates.empty:
-                flash("Data untuk bulan tersebut sudah ada di database!", 'danger')
-                return redirect('/upload')
-            
+                for _, row in duplicate_dates.iterrows():
+                    old_data = df_old[df_old['date'] == row['date']]
+                    if not old_data.empty:
+                        old_data_index = old_data.index[0]
+                        df_old.at[old_data_index, 'total'] = row['total'] 
+                        flash(f"Data per tanggal {row['date']} telah diganti dengan data yang baru.", 'info')
+
             df_combined = pd.concat([pd.DataFrame(df_old), df_new_monthly]).drop_duplicates(subset=['date'], keep='last')
 
             with db.session.no_autoflush:
@@ -494,7 +572,6 @@ def upload():
             return redirect('/upload')
 
     return render_template('upload.html')
-
 
 @app.route('/about')
 def about():
@@ -511,7 +588,7 @@ def penjualan():
 def predict():
     if request.method == 'POST':
         category = request.form.get('category')
-        n_months = int(request.form.get('n_months'))  # Number of months to forecast
+        n_months = int(request.form.get('n_months'))  
 
         try:
             df = read_and_process_data(category)
@@ -671,7 +748,156 @@ def predict():
 
     return render_template('predict.html')
 
+def get_sales_data_by_months(category, start_month, end_month):
+    # Fetch the category object
+    category_obj = Categories.query.filter_by(name=category).first()
+    if not category_obj:
+        raise ValueError(f"Kategori '{category}' tidak ditemukan.")
 
+    # Fetch sales data for the specified category and months
+    sales_data = Sales.query.filter_by(category_id=category_obj.id).filter(
+        db.extract('month', db.func.str_to_date(Sales.date, '%m-%Y')).between(start_month, end_month)
+    ).all()
+    
+    print(f"Raw data fetched from the database for category '{category}' and months {start_month} to {end_month}:")
+    for sale in sales_data:
+        print(f"Date: {sale.date}, Total: {sale.total}")
+    
+    # Convert to DataFrame
+    df = pd.DataFrame([{
+        'Tanggal': sale.date,
+        'Total': sale.total
+    } for sale in sales_data])
+    
+    return df
+
+
+def get_historical_data(start_month, end_month):
+    # Query database to get historical data within the selected month range for all available years
+    historical_data = Sales.query.filter(
+        db.extract('month', Sales.date).between(start_month, end_month)
+    ).all()
+
+    # Convert to DataFrame
+    data = pd.DataFrame([(sale.date, sale.total) for sale in historical_data], columns=['date', 'total'])
+    data.set_index('date', inplace=True)
+    return data
+
+# Function to prepare data for LSTM model
+
+def prepare_lstm_data(data):
+    if data.empty or 'total' not in data.columns:
+        raise ValueError("No data found in the selected range. Please check the start and end month selection.")
+
+    # Initialize the scaler and apply scaling
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    data['scaled_total'] = scaler.fit_transform(data['total'].values.reshape(-1, 1))
+
+    # Prepare X and y for LSTM model
+    X = []
+    y = []
+    look_back = 3  # Adjust look_back as needed
+    for i in range(look_back, len(data)):
+        X.append(data['scaled_total'][i-look_back:i])
+        y.append(data['scaled_total'][i])
+
+    X = np.array(X)
+    y = np.array(y)
+
+    # Reshape X for LSTM input (samples, timesteps, features)
+    X = X.reshape((X.shape[0], X.shape[1], 1))
+    return X, y, scaler
+
+# Function to create and compile the LSTM model
+def load_lstm_model(input_shape):
+    model = Sequential()
+    model.add(LSTM(50, return_sequences=True, input_shape=input_shape))
+    model.add(LSTM(50))
+    model.add(Dense(1))
+    model.compile(optimizer='adam', loss='mean_squared_error')
+    return model
+
+
+@app.route('/user_pred', methods=['GET', 'POST'])
+def user_pred():
+    if request.method == 'POST':
+        # Get the form values
+        category = request.form.get('category')
+        start_month = request.form.get('start_month')
+        end_month = request.form.get('end_month')
+
+        print(f"Received category: {category}, start_month: {start_month}, end_month: {end_month}")
+
+        # Check if the form values are valid
+        if not category or not start_month or not end_month:
+            print("Error: Category, start month, and end month are required.")
+            return jsonify({'error': "Category, start month, and end month are required."}), 400
+
+        try:
+            # Convert the start_month and end_month to integers
+            start_month = int(start_month) if start_month else None
+            end_month = int(end_month) if end_month else None
+
+            # Check if months are in valid range
+            if start_month is None or end_month is None or not (1 <= start_month <= 12) or not (1 <= end_month <= 12):
+                print("Error: Month values must be between 1 and 12.")
+                return jsonify({'error': "Month values must be between 1 and 12."}), 400
+
+            # Fetch historical data based on the category and months selected
+            historical_data = get_sales_data_by_months(category, start_month, end_month)
+            print(f"Fetched historical data: {historical_data.head()}")
+
+            if historical_data.empty:
+                print("Error: No data found in the selected range.")
+                return jsonify({'error': "No data found in the selected range. Please check the start and end month selection."}), 400
+
+            # Prepare the data for the LSTM model
+            X, y, scaler = prepare_lstm_data(historical_data)
+            print(f"Prepared LSTM data: X shape: {X.shape}, y shape: {y.shape}")
+
+            # Load the LSTM model and make predictions
+            model = load_lstm_model(input_shape=(X.shape[1], 1))
+            model.fit(X, y, epochs=10, batch_size=1, verbose=0)  # Train the model
+            prediction = model.predict(X)
+            prediction = scaler.inverse_transform(prediction)  # Reverse the scaling
+            y_true = scaler.inverse_transform(y.reshape(-1, 1))  # Reverse the scaling for true values
+
+            # Calculate metrics
+            train_mae = mean_absolute_error(y_true, prediction)
+            train_mse = mean_squared_error(y_true, prediction)
+            train_rmse = np.sqrt(train_mse)
+            train_mape = np.mean(np.abs((y_true - prediction) / y_true)) * 100
+
+            # Generate the plot
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(historical_data['Tanggal'], historical_data['Total'], label='Actual Sales')
+            ax.plot(historical_data['Tanggal'][-len(prediction):], prediction, label='Predicted Sales', color='red')
+            ax.set_xlabel('Date')
+            ax.set_ylabel('Sales')
+            ax.set_title('Sales Prediction')
+            ax.legend()
+
+            # Save the plot to a BytesIO object and encode it in base64 for embedding in the HTML
+            img = BytesIO()
+            FigureCanvas(fig).print_png(img)
+            img.seek(0)
+            plot_url = b64encode(img.getvalue()).decode('utf8')
+
+            # Return the prediction data and plot URL as JSON
+            return jsonify({
+                'plot_url': plot_url,
+                'train_mae': train_mae,
+                'train_mse': train_mse,
+                'train_rmse': train_rmse,
+                'train_mape': train_mape
+            })
+
+        except ValueError as e:
+            print(f"ValueError: {str(e)}")
+            return jsonify({'error': "Invalid input: " + str(e)}), 400
+
+    # If GET request, render the form
+    return render_template('user_prediction.html')
 
 def get_sales_data(category, page, items_per_page):
     query = db.session.query(Sales).join(Categories)  
