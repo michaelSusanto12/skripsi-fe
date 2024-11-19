@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Predict Sales by Month</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <style>
+        body {
+            background-color: #fae8b4;
+        }
+
+        .navbar-custom {
+            background-color: #3d3d3d;
+        }
+
+        .navbar-nav .nav-link {
+            color: #fae8b4;
+        }
+
+        .navbar-brand {
+            color: #fae8b4;
+        }
+
+        .form-container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            margin-bottom: 30px;
+        }
+
+        .btn-dark {
+            position: relative;
+        }
+
+        .spinner-border {
+            display: none;
+            width: 1rem;
+            height: 1rem;
+            vertical-align: middle;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar navbar-custom navbar-expand-lg navbar-light">
+        <div class="container-fluid">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse nav justify-content-end" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/" style="color: #e0e0e0;">Beranda</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/upload" style="color: #e0e0e0;">Upload</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/predict" style="color: #e0e0e0;">Prediksi</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/predict_by_month" style="color: #fae8b4;">Prediksi Bulanan</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/about" style="color: #e0e0e0;">Tentang</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/delete" style="color: #e0e0e0;">Lihat Data</a>
+                    </li>
+                    <li class="nav-item">
+                        <form action="{{ url_for('logout') }}" method="POST" style="display: inline;">
+                            <button type="submit" class="nav-link"
+                                style="background: none; border: none; color: #e0e0e0; cursor: pointer;">
+                                Logout
+                            </button>
+                        </form>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <h1 class="text-center">Prediksi Berdasarkan Bulan Yang Dipilih</h1>
+        <div class="form-container mt-4">
+            <div class="container">
+                <form id="predict-form" action="/predict_by_month" method="post" class="mb-4">
+                    <div class="mb-3">
+                        <label for="category" class="form-label">Category</label>
+                        <select id="category" name="category" class="form-select" required>
+                            <option value="lada_halus">Lada Halus</option>
+                            <option value="lada_butir">Lada Butir</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="start_month" class="form-label">Start Month</label>
+                        <select id="start_month" name="start_month" class="form-select" required>
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="end_month" class="form-label">End Month</label>
+                        <select id="end_month" name="end_month" class="form-select" required>
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <button type="submit" class="btn btn-dark w-100" id="predict-btn">
+                            <span id="loadingSpinner" class="spinner-border spinner-border-sm"
+                                style="display: none;"></span>
+                            <span id="buttonText">Prediksi</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div id="result" class="mt-5">
+            <div class="plot-container">
+                <img id="plot" src="" alt="Plot Prediksi" class="img-fluid" style="display: none;">
+            </div>
+            <div id="metrics" style="display: none;" class="mt-4">
+                <h2>Hasil Evaluasi</h2>
+                <div class="row">
+                    <div class="col-md-4">
+                        <p><strong>Training Error:</strong></p>
+                        <ul>
+                            <li>MAE: <span id="train_mae"></span></li>
+                            <li>MSE: <span id="train_mse"></span></li>
+                            <li>RMSE: <span id="train_rmse"></span></li>
+                            <li>MAPE: <span id="train_mape"></span></li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Validation Error:</strong></p>
+                        <ul>
+                            <li>MAE: <span id="val_mae"></span></li>
+                            <li>MSE: <span id="val_mse"></span></li>
+                            <li>RMSE: <span id="val_rmse"></span></li>
+                            <li>MAPE: <span id="val_mape"></span></li>
+                        </ul>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Testing Error:</strong></p>
+                        <ul>
+                            <li>MAE: <span id="test_mae"></span></li>
+                            <li>MSE: <span id="test_mse"></span></li>
+                            <li>RMSE: <span id="test_rmse"></span></li>
+                            <li>MAPE: <span id="test_mape"></span></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            document.getElementById('predict-form').addEventListener('submit', async function (event) {
+                event.preventDefault();
+                const startMonth = parseInt(document.getElementById('start_month').value);
+                const endMonth = parseInt(document.getElementById('end_month').value);
+                if (startMonth === endMonth) {
+                    alert('Start Month dan End Month tidak boleh sama. Silakan pilih bulan yang berbeda.');
+                    return;
+                }
+
+                if (startMonth > endMonth) {
+                    alert('Start Month tidak boleh lebih besar dari End Month. Silakan pilih bulan yang valid.');
+                    return;
+                }
+                const formData = new FormData(this);
+                const predictBtn = document.getElementById('predict-btn');
+                const spinner = document.getElementById('loadingSpinner');
+                const buttonText = document.getElementById('buttonText');
+                const plotElement = document.getElementById('plot');
+                const metricsContainer = document.getElementById('metrics');
+
+
+                spinner.style.display = 'inline-block';
+                buttonText.style.display = 'none';
+                predictBtn.disabled = true;
+                plotElement.style.display = 'none';
+                metricsContainer.style.display = 'none';
+
+                try {
+                    const response = await fetch('/predict_by_month', {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok.');
+                    }
+
+                    const data = await response.json();
+
+                    plotElement.src = 'data:image/png;base64,' + data.plot_url;
+                    plotElement.style.display = 'block';
+
+                    metricsContainer.style.display = 'block';
+                    document.getElementById('train_mae').textContent = data.train_mae.toFixed(4);
+                    document.getElementById('train_mse').textContent = data.train_mse.toFixed(4);
+                    document.getElementById('train_rmse').textContent = data.train_rmse.toFixed(4);
+                    document.getElementById('train_mape').textContent = (data.train_mape).toFixed(4);
+
+                    document.getElementById('val_mae').textContent = data.val_mae.toFixed(4);
+                    document.getElementById('val_mse').textContent = data.val_mse.toFixed(4);
+                    document.getElementById('val_rmse').textContent = data.val_rmse.toFixed(4);
+                    document.getElementById('val_mape').textContent = (data.val_mape).toFixed(4);
+
+                    document.getElementById('test_mae').textContent = data.test_mae.toFixed(4);
+                    document.getElementById('test_mse').textContent = data.test_mse.toFixed(4);
+                    document.getElementById('test_rmse').textContent = data.test_rmse.toFixed(4);
+                    document.getElementById('test_mape').textContent = (data.test_mape).toFixed(4);
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('An error occurred while processing the prediction.');
+                } finally {
+                    spinner.style.display = 'none';
+                    buttonText.style.display = 'inline';
+                    predictBtn.disabled = false;
+                }
+            });
+        </script>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

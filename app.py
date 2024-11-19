@@ -20,6 +20,7 @@ from flask_bcrypt import Bcrypt
 from flask_migrate import Migrate
 from flask_login import login_user, current_user, LoginManager, UserMixin, login_required, logout_user
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from admin import admin_bp
 
 import locale
 locale.setlocale(locale.LC_TIME, 'id_ID')
@@ -28,6 +29,7 @@ app = Flask(__name__)
 app.secret_key = 'supersecretkey'
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
+app.register_blueprint(admin_bp, url_prefix='/admin')
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:@localhost/skripsi_tes'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -65,6 +67,7 @@ class Sales(db.Model):
 with app.app_context():
     db.create_all()
 
+
 def read_and_process_data(category):
     category_obj = Categories.query.filter_by(name=category).first()
     if not category_obj:
@@ -84,25 +87,34 @@ def read_and_process_data(category):
     print("Initial DataFrame from database data:")
     print(df.head())
 
-    df['Tanggal'] = pd.to_datetime(df['Tanggal'], format='%m-%Y')
+    df['Tanggal'] = pd.to_datetime(df['Tanggal'], format='%m-%Y', errors='coerce')
+    
+    df.dropna(subset=['Tanggal'], inplace=True)
+    
+    df = df.sort_values(by='Tanggal', ascending=True)
+    
     df.set_index('Tanggal', inplace=True)
 
     Q1 = df['Total'].quantile(0.25)
     Q3 = df['Total'].quantile(0.75)
     IQR = Q3 - Q1
 
-    df['Total'] = np.where((df['Total'] < (Q1 - 1.5 * IQR)) | (df['Total'] > (Q3 + 1.5 * IQR)),
-                            np.nan,
-                            df['Total'])
+    df['Total'] = np.where(
+        (df['Total'] < (Q1 - 1.5 * IQR)) | (df['Total'] > (Q3 + 1.5 * IQR)),
+        np.nan,
+        df['Total']
+    )
+    
     df['Total'] = df['Total'].interpolate(method='linear')
-    
-    df['Total'].fillna(method='ffill', inplace=True)  
+
+    df['Total'].fillna(method='ffill', inplace=True)
     df['Total'].fillna(method='bfill', inplace=True)
-    
-    print("Processed DataFrame after handling outliers:")
+
+    print("Processed DataFrame after handling outliers and sorting:")
     print(df.head())
     
     return df
+
 
 def convert_daily_to_monthly(df):
     df['date'] = pd.to_datetime(df['date'], dayfirst=True, errors='coerce')
@@ -290,34 +302,33 @@ def login():
 @app.route('/logout', methods=['POST'])
 @login_required
 def logout():
-    if current_user.role == 'admin':
-        logout_user()  
-        session.clear()  
+    role = current_user.role
+    logout_user()
+    session.clear()
+    
+    if role == 'admin':
         flash('Admin logged out successfully.', 'success')
-        return redirect(url_for('admin_login')) 
-
-    elif current_user.role == 'user':
-        logout_user()  
-        session.clear()  
+        return redirect(url_for('admin_login'))
+    elif role == 'user':
         flash('Anda sudah logout.', 'success')
-        return redirect(url_for('login'))  
-
+        return redirect(url_for('login'))
+    
     return redirect(url_for('login'))
 
 
 @app.route('/admin/dashboard')
-@login_required  
+@login_required
 def admin_dashboard():
     if not current_user.is_authenticated or current_user.role != 'admin':
         flash('Access denied. Admin access only.', 'danger')
-        return redirect(url_for('admin_login'))  
+        return redirect(url_for('admin_login'))
 
     approved_users = User.query.filter_by(is_approved=True).all()
     pending_users = User.query.filter_by(is_approved=False).all()
     approved_count = len(approved_users)
     pending_count = len(pending_users)
 
-    return render_template('admin/admin_dashboard.html', 
+    return render_template('admin_dashboard.html', 
                            approved_users=approved_users, 
                            pending_users=pending_users,
                            approved_count=approved_count,
@@ -342,10 +353,8 @@ def get_dashboard_data():
         'pending_users': [{'id': u.id, 'username': u.username, 'email': u.email, 'role': u.role} for u in pending_users]
     }
 
-
     return jsonify(data)
-
-
+    
     
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
@@ -369,7 +378,7 @@ def admin_login():
         else:
             flash('Invalid credentials, please try again.', 'danger') 
 
-    return render_template('admin/admin_login.html')
+    return render_template('admin_login.html')
 
 
 @app.route('/admin/register', methods=['GET', 'POST'])
@@ -408,41 +417,47 @@ def admin_register():
             flash('An error occurred while registering the new admin. Please try again.', 'danger')
             print(f"Error: {e}") 
 
-    return render_template('admin/admin_register.html')
+    return render_template('admin_register.html')
 
-@app.route('/admin/approve_user/<int:user_id>', methods=['GET', 'POST'])
+@app.route('/admin/approve_user/<int:user_id>', methods=['POST'])
 @login_required
 def approve_user(user_id):
-    if current_user.role != 'admin':
+    if not current_user.is_authenticated or current_user.role != 'admin':
         flash('Access denied. You are not an admin.', 'danger')
         return redirect(url_for('login'))
 
     user = User.query.get(user_id)
-    if user:
+    if not user:
+        flash('User not found.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    try:
         user.is_approved = True
         db.session.commit()
         flash(f'User {user.username} has been approved.', 'success')
-    else:
-        flash('User not found.', 'danger')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error approving user: {str(e)}', 'danger')
 
-    return redirect(url_for('admin/admin_dashboard'))
+    return redirect(url_for('admin_dashboard'))
 
-@app.route('/admin/delete_user/<int:user_id>', methods=['GET', 'POST'])
+
+@app.route('/admin/delete_user/<int:user_id>', methods=['POST'])
 @login_required
 def delete_user(user_id):
-    if current_user.role != 'admin':
-        flash('Access denied. You are not an admin.', 'danger')
-        return redirect(url_for('login')) 
-
+    print(f"DEBUG: Deleting user with ID: {user_id}")
     user = User.query.get(user_id)
-    if user:
+    if not user:
+        flash('User not found.', 'danger')
+        return redirect(url_for('admin_dashboard'))
+    try:
         db.session.delete(user)
         db.session.commit()
         flash(f'User {user.username} has been deleted.', 'success')
-    else:
-        flash('User not found.', 'danger')
-
-    return redirect(url_for('admin/admin_dashboard'))
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting user: {str(e)}', 'danger')
+    return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/delete_approved_user/<int:user_id>', methods=['POST'])
 @login_required
@@ -458,13 +473,13 @@ def delete_approved_user(user_id):
         flash('User deleted successfully.', 'success')
     else:
         flash('User not found!', 'danger')
-    return redirect(url_for('admin/admin_dashboard'))
+    return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/admin_list_data', methods=['GET', 'POST'])
 def admin_list_data():
-    category = request.args.get('category', 'lada_halus') 
-    items_per_page = request.args.get('items_per_page', 5)  
-    page = int(request.args.get('page', 1))
+    category = request.args.get('category', 'lada_halus')  
+    items_per_page = request.args.get('items_per_page', '5') 
+    page = int(request.args.get('page', 1))  
 
     if items_per_page == 'all':
         items_per_page = None
@@ -476,17 +491,32 @@ def admin_list_data():
     if category:
         query = query.filter(Sales.category.has(name=category))
 
-    total_sales = query.count()
+    sales_data = query.all()
+
+    print("Raw sales data:")
+    for sale in sales_data:
+        print(sale.date)
+
+    sales_data = sorted(sales_data, key=lambda sale: datetime.strptime(sale.date, '%m-%Y'))
+
+    print("Sorted sales data:")
+    for sale in sales_data:
+        print(sale.date)
+
+    total_sales = len(sales_data)
     total_pages = (total_sales + (items_per_page - 1)) // items_per_page if items_per_page else 1
 
     if items_per_page:
-        sales_data = query.paginate(page=page, per_page=items_per_page, error_out=False).items
-    else:
-        sales_data = query.all()
+        start = (page - 1) * items_per_page
+        end = start + items_per_page
+        sales_data = sales_data[start:end]
+
+    for sale in sales_data:
+        sale.month_year = datetime.strptime(sale.date, '%m-%Y').strftime('%B %Y') 
 
     if request.method == 'POST':
-        action = request.form.get('action')
-        sale_id = request.form.get('sale_id')
+        action = request.form.get('action') 
+        sale_id = request.form.get('sale_id')  
 
         if action == 'delete' and sale_id:
             sale = Sales.query.get(sale_id)
@@ -501,21 +531,25 @@ def admin_list_data():
         elif action == 'edit' and sale_id:
             sale = Sales.query.get(sale_id)
             if sale:
-                new_total = request.form.get('total')
-                sale.total = new_total 
-                db.session.commit()
-                flash('Data berhasil diperbarui', 'success')
+                new_total = request.form.get('total') 
+                try:
+                    sale.total = float(new_total)  
+                    db.session.commit()
+                    flash('Data berhasil diperbarui', 'success')
+                except ValueError:
+                    flash('Total harus berupa angka yang valid', 'danger')
             else:
                 flash('Data tidak ditemukan', 'danger')
             return redirect(url_for('admin_list_data', category=category, page=page, items_per_page=items_per_page))
 
-    return render_template('admin/admin_list_data.html', 
-                           sales_data=sales_data, 
-                           category=category, 
-                           items_per_page=items_per_page, 
-                           page=page, 
-                           total_pages=total_pages)
-
+    return render_template(
+        'admin_list_data.html',
+        sales_data=sales_data,
+        category=category,
+        items_per_page=items_per_page,
+        page=page,
+        total_pages=total_pages
+    )
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload():
@@ -597,7 +631,7 @@ def predict():
 
             units_1 = 128
             units_2 = 64
-            batch_size = 16
+            batch_size = 32
             look_back = 1
             epoch = 100
             learning_rate = 0.001
@@ -682,21 +716,26 @@ def predict():
 
             extended_dates = np.concatenate([test_dates, future_dates])
             extended_predictions = np.concatenate([test_predictions.flatten(), future_predictions_rescaled.flatten()])
+            
+            print(f"future_predictions_rescaled: {future_predictions_rescaled}")
+            print(f"test dates : {test_dates}")
+            print(f"test predictions : {test_predictions.flatten()}")
+            print(f"test values : {y_test_rescaled}")
 
-            axs[2].set_xlim([min(test_dates.min(), future_dates.min()), future_dates.max()])
-            axs[2].plot(test_dates, y_test_rescaled, label='Aktual', color='black', linestyle='-', marker='o')
-            axs[2].plot(test_dates, test_predictions.flatten(), color='orange', linestyle='--', marker='x', label='Prediksi (Testing)')
-            axs[2].plot(test_dates[-1:], test_predictions[-1:], color='orange', linestyle='--', marker='x') 
-            axs[2].plot(extended_dates[-len(future_dates)-1:], extended_predictions[-len(future_predictions_rescaled)-1:], color='green', linestyle='--', marker='s', label='Prediksi Masa Depan')
+            axs[2].set_xlim([test_dates.min(), max(future_dates.max(), test_dates.max())])
+
+            axs[2].plot(test_dates, y_test_rescaled, label='Aktual (Testing)', color='black', linestyle='-', marker='o', markersize=8)
+
+            axs[2].plot(extended_dates, extended_predictions, label='Prediksi (Testing + Masa Depan)', 
+                        color='orange', linestyle='--', marker='x', markersize=8)
+
             axs[2].set_title('Data Testing dan Prediksi Masa Depan')
             axs[2].set_xlabel('Tanggal')
             axs[2].set_ylabel('Total')
+            axs[2].legend(loc='upper left')  
 
-            for date, value in zip(test_dates, test_predictions.flatten()):
-                axs[2].text(date, value, f'{int(value)}', ha='center', va='bottom', fontsize=12, color='orange')
-
-            for date, value in zip(future_dates, future_predictions_rescaled.flatten()):
-                axs[2].text(date, value, f'{int(value)}', ha='center', va='bottom', fontsize=12, color='green')
+            for date, value in zip(extended_dates, extended_predictions):
+                axs[2].text(date, value, f'{int(value)}', ha='center', va='bottom', fontsize=10, color='orange')
 
             axs[2].legend()
             axs[2].grid(True)
@@ -749,12 +788,10 @@ def predict():
     return render_template('predict.html')
 
 def get_sales_data_by_months(category, start_month, end_month):
-    # Fetch the category object
     category_obj = Categories.query.filter_by(name=category).first()
     if not category_obj:
         raise ValueError(f"Kategori '{category}' tidak ditemukan.")
 
-    # Fetch sales data for the specified category and months
     sales_data = Sales.query.filter_by(category_id=category_obj.id).filter(
         db.extract('month', db.func.str_to_date(Sales.date, '%m-%Y')).between(start_month, end_month)
     ).all()
@@ -763,141 +800,12 @@ def get_sales_data_by_months(category, start_month, end_month):
     for sale in sales_data:
         print(f"Date: {sale.date}, Total: {sale.total}")
     
-    # Convert to DataFrame
     df = pd.DataFrame([{
         'Tanggal': sale.date,
         'Total': sale.total
     } for sale in sales_data])
     
     return df
-
-
-def get_historical_data(start_month, end_month):
-    # Query database to get historical data within the selected month range for all available years
-    historical_data = Sales.query.filter(
-        db.extract('month', Sales.date).between(start_month, end_month)
-    ).all()
-
-    # Convert to DataFrame
-    data = pd.DataFrame([(sale.date, sale.total) for sale in historical_data], columns=['date', 'total'])
-    data.set_index('date', inplace=True)
-    return data
-
-# Function to prepare data for LSTM model
-
-def prepare_lstm_data(data):
-    if data.empty or 'total' not in data.columns:
-        raise ValueError("No data found in the selected range. Please check the start and end month selection.")
-
-    # Initialize the scaler and apply scaling
-    scaler = MinMaxScaler(feature_range=(0, 1))
-    data['scaled_total'] = scaler.fit_transform(data['total'].values.reshape(-1, 1))
-
-    # Prepare X and y for LSTM model
-    X = []
-    y = []
-    look_back = 3  # Adjust look_back as needed
-    for i in range(look_back, len(data)):
-        X.append(data['scaled_total'][i-look_back:i])
-        y.append(data['scaled_total'][i])
-
-    X = np.array(X)
-    y = np.array(y)
-
-    # Reshape X for LSTM input (samples, timesteps, features)
-    X = X.reshape((X.shape[0], X.shape[1], 1))
-    return X, y, scaler
-
-# Function to create and compile the LSTM model
-def load_lstm_model(input_shape):
-    model = Sequential()
-    model.add(LSTM(50, return_sequences=True, input_shape=input_shape))
-    model.add(LSTM(50))
-    model.add(Dense(1))
-    model.compile(optimizer='adam', loss='mean_squared_error')
-    return model
-
-
-@app.route('/user_pred', methods=['GET', 'POST'])
-def user_pred():
-    if request.method == 'POST':
-        # Get the form values
-        category = request.form.get('category')
-        start_month = request.form.get('start_month')
-        end_month = request.form.get('end_month')
-
-        print(f"Received category: {category}, start_month: {start_month}, end_month: {end_month}")
-
-        # Check if the form values are valid
-        if not category or not start_month or not end_month:
-            print("Error: Category, start month, and end month are required.")
-            return jsonify({'error': "Category, start month, and end month are required."}), 400
-
-        try:
-            # Convert the start_month and end_month to integers
-            start_month = int(start_month) if start_month else None
-            end_month = int(end_month) if end_month else None
-
-            # Check if months are in valid range
-            if start_month is None or end_month is None or not (1 <= start_month <= 12) or not (1 <= end_month <= 12):
-                print("Error: Month values must be between 1 and 12.")
-                return jsonify({'error': "Month values must be between 1 and 12."}), 400
-
-            # Fetch historical data based on the category and months selected
-            historical_data = get_sales_data_by_months(category, start_month, end_month)
-            print(f"Fetched historical data: {historical_data.head()}")
-
-            if historical_data.empty:
-                print("Error: No data found in the selected range.")
-                return jsonify({'error': "No data found in the selected range. Please check the start and end month selection."}), 400
-
-            # Prepare the data for the LSTM model
-            X, y, scaler = prepare_lstm_data(historical_data)
-            print(f"Prepared LSTM data: X shape: {X.shape}, y shape: {y.shape}")
-
-            # Load the LSTM model and make predictions
-            model = load_lstm_model(input_shape=(X.shape[1], 1))
-            model.fit(X, y, epochs=10, batch_size=1, verbose=0)  # Train the model
-            prediction = model.predict(X)
-            prediction = scaler.inverse_transform(prediction)  # Reverse the scaling
-            y_true = scaler.inverse_transform(y.reshape(-1, 1))  # Reverse the scaling for true values
-
-            # Calculate metrics
-            train_mae = mean_absolute_error(y_true, prediction)
-            train_mse = mean_squared_error(y_true, prediction)
-            train_rmse = np.sqrt(train_mse)
-            train_mape = np.mean(np.abs((y_true - prediction) / y_true)) * 100
-
-            # Generate the plot
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.plot(historical_data['Tanggal'], historical_data['Total'], label='Actual Sales')
-            ax.plot(historical_data['Tanggal'][-len(prediction):], prediction, label='Predicted Sales', color='red')
-            ax.set_xlabel('Date')
-            ax.set_ylabel('Sales')
-            ax.set_title('Sales Prediction')
-            ax.legend()
-
-            # Save the plot to a BytesIO object and encode it in base64 for embedding in the HTML
-            img = BytesIO()
-            FigureCanvas(fig).print_png(img)
-            img.seek(0)
-            plot_url = b64encode(img.getvalue()).decode('utf8')
-
-            # Return the prediction data and plot URL as JSON
-            return jsonify({
-                'plot_url': plot_url,
-                'train_mae': train_mae,
-                'train_mse': train_mse,
-                'train_rmse': train_rmse,
-                'train_mape': train_mape
-            })
-
-        except ValueError as e:
-            print(f"ValueError: {str(e)}")
-            return jsonify({'error': "Invalid input: " + str(e)}), 400
-
-    # If GET request, render the form
-    return render_template('user_prediction.html')
 
 def get_sales_data(category, page, items_per_page):
     query = db.session.query(Sales).join(Categories)  
@@ -977,6 +885,309 @@ def delete_data(id):
     flash("Data successfully deleted!")
     return redirect(url_for('delete'))
 
+@app.route('/admin/edit_total/<int:data_id>', methods=['POST'])
+@login_required
+def edit_total_admin(data_id):
+    if current_user.role != 'admin':
+        flash('Access denied. You are not an admin.', 'danger')
+        return redirect(url_for('login'))
+
+    new_total = request.form.get('new_total')
+    if not new_total:
+        flash('Total cannot be empty.', 'danger')
+        return redirect(url_for('admin_list_data'))
+
+    data = Sales.query.get(data_id)
+    if data:
+        data.total = new_total
+        db.session.commit()
+        flash('Total successfully updated.', 'success')
+    else:
+        flash('Data not found.', 'danger')
+
+    return redirect(url_for('admin_list_data'))
+
+
+@app.route('/admin/delete_data/<int:data_id>', methods=['POST'])
+@login_required
+def delete_data_admin(data_id):
+    if current_user.role != 'admin':
+        flash('Access denied. You are not an admin.', 'danger')
+        return redirect(url_for('login'))
+
+    data = Sales.query.get(data_id)
+    if data:
+        db.session.delete(data)
+        db.session.commit()
+        flash('Data successfully deleted.', 'success')
+    else:
+        flash('Data not found.', 'danger')
+
+    return redirect(url_for('admin_list_data'))
+
+def read_and_process_data_monthly_user(category):
+    category_obj = Categories.query.filter_by(name=category).first()
+    if not category_obj:
+        raise ValueError(f"Kategori '{category}' tidak ditemukan.")
+
+    sales_data = Sales.query.filter_by(category_id=category_obj.id).all()
+    
+    print(f"Raw data fetched from the database for category '{category}':")
+    for sale in sales_data:
+        print(f"Date: {sale.date}, Total: {sale.total}")
+    
+    df = pd.DataFrame([{
+        'Tanggal': sale.date,
+        'Total': sale.total
+    } for sale in sales_data])
+
+    print("Initial DataFrame from database data:")
+    print(df.head())
+
+    # Ensure 'Tanggal' column is in datetime format
+    df['Tanggal'] = pd.to_datetime(df['Tanggal'], format='%m-%Y', errors='coerce')
+    
+    # Drop rows with invalid dates
+    df.dropna(subset=['Tanggal'], inplace=True)
+    
+    # Sort the DataFrame by 'Tanggal'
+    df = df.sort_values(by='Tanggal', ascending=True)
+    
+    # Handle outliers
+    Q1 = df['Total'].quantile(0.25)
+    Q3 = df['Total'].quantile(0.75)
+    IQR = Q3 - Q1
+
+    df['Total'] = np.where(
+        (df['Total'] < (Q1 - 1.5 * IQR)) | (df['Total'] > (Q3 + 1.5 * IQR)),
+        np.nan,
+        df['Total']
+    )
+    
+    # Interpolate missing values
+    df['Total'] = df['Total'].interpolate(method='linear')
+
+    # Forward fill and backward fill remaining missing values
+    df['Total'].fillna(method='ffill', inplace=True)
+    df['Total'].fillna(method='bfill', inplace=True)
+
+    print("Processed DataFrame after handling outliers and sorting:")
+    print(df.head())
+    
+    return df
+
+def create_dataset2(dataset, look_back=1):
+    X, Y = [], []
+    for i in range(len(dataset) - look_back + 1):
+        X.append(dataset[i:(i + look_back), 0])
+        Y.append(dataset[i + look_back - 1, 0])
+    return np.array(X), np.array(Y)
+
+@app.route('/predict_by_month', methods=['GET', 'POST'])
+def predict_by_month():
+    if request.method == 'POST':
+        # Ambil data input dari form
+        category = request.form.get('category')
+        start_month = int(request.form.get('start_month'))
+        end_month = int(request.form.get('end_month'))
+
+        # Debugging log
+        print(f"Received category: {category}, start_month: {start_month}, end_month: {end_month}")
+
+        try:
+            # Baca dan proses data berdasarkan kategori
+            df = read_and_process_data_monthly_user(category)
+            print("Data read successfully")
+
+            if 'Tanggal' not in df.columns:
+                raise ValueError("The 'Tanggal' column is missing from the data.")
+            if 'Total' not in df.columns:
+                raise ValueError("The 'Total' column is missing from the data.")
+
+            # Ubah kolom 'Tanggal' ke format datetime
+            df['Tanggal'] = pd.to_datetime(df['Tanggal'], format='%Y-%m', errors='coerce')
+            df.dropna(subset=['Tanggal'], inplace=True)
+            print("Tanggal column converted to datetime")
+
+            # Filter data berdasarkan bulan
+            if start_month <= end_month:
+                df_filtered = df[df['Tanggal'].dt.month.isin(range(start_month, end_month + 1))]
+            else:
+                df_filtered = df[df['Tanggal'].dt.month.isin(
+                    list(range(start_month, 13)) + list(range(1, end_month + 1))
+                )]
+
+            if df_filtered.empty:
+                raise ValueError(f"No data available for the selected months ({start_month} to {end_month}).")
+
+            print(f"Filtered data for months {start_month} to {end_month}:")
+            print(df_filtered)
+            print(f"Data length: {len(df_filtered)}")
+
+            # Normalisasi data
+            scaler = MinMaxScaler(feature_range=(0, 1))
+            scaled_data = scaler.fit_transform(df_filtered['Total'].values.reshape(-1, 1))
+            print("Data scaled successfully")
+
+            # Hyperparameter
+            units_1, units_2 = 128, 64
+            batch_size, look_back, epochs = 32, 1, 100
+            learning_rate = 0.001
+
+            # Persiapkan dataset untuk LSTM
+            X, y = create_dataset2(scaled_data, look_back)
+            X = np.reshape(X, (X.shape[0], X.shape[1], 1))
+            print("Dataset created for LSTM")
+            
+            total_samples = len(X)
+            print(f"Total samples available: {total_samples}")
+
+            # Split data menjadi training, validation, dan testing
+            train_size = int(total_samples * 0.7)
+            val_size = int(total_samples * 0.15)
+            test_size = total_samples - train_size - val_size
+            
+            if train_size + val_size + test_size > total_samples:
+                raise ValueError("Not enough data to split into training, validation, and testing sets.")
+
+            X_train, y_train = X[:train_size], y[:train_size]
+            X_val, y_val = X[train_size:train_size + val_size], y[train_size:train_size + val_size]
+            X_test, y_test = X[train_size + val_size:], y[train_size + val_size:]
+            print("Data split successfully")
+            print(f"the data: {X}")
+            print(f"the test before scaled : {y_test}")
+
+            # Bangun dan latih model
+            model = Sequential([
+                LSTM(units_1, return_sequences=True, input_shape=(look_back, 1)),
+                Dropout(0.2),
+                LSTM(units_2),
+                Dropout(0.2),
+                Dense(1)
+            ])
+            optimizer = Adam(learning_rate=learning_rate)
+            model.compile(optimizer=optimizer, loss=Huber())
+            print("Model compiled successfully")
+
+            early_stopping = EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
+            history = model.fit(X_train, y_train, validation_data=(X_val, y_val), 
+                                epochs=epochs, batch_size=batch_size, verbose=2, callbacks=[early_stopping])
+            print("Model training completed")
+
+            # Prediksi dan inverse transform
+            train_predictions = scaler.inverse_transform(model.predict(X_train))
+            val_predictions = scaler.inverse_transform(model.predict(X_val))
+            test_predictions = scaler.inverse_transform(model.predict(X_test))
+
+            y_train_rescaled = scaler.inverse_transform(y_train.reshape(-1, 1))
+            y_val_rescaled = scaler.inverse_transform(y_val.reshape(-1, 1))
+            y_test_rescaled = scaler.inverse_transform(y_test.reshape(-1, 1))
+
+            # Generate tanggal untuk prediksi
+            train_dates = df_filtered['Tanggal'][:train_size]
+            val_dates = df_filtered['Tanggal'][train_size:train_size + val_size]
+            test_dates = df_filtered['Tanggal'][train_size + val_size:train_size + val_size + len(y_test)]
+
+            # Prediksi masa depan untuk bulan yang diminta pada tahun depan
+            last_data_point = scaled_data[-look_back:].reshape(1, look_back, 1)
+            future_predictions = []
+            future_dates_start = df_filtered['Tanggal'].max() + pd.DateOffset(months=1)
+
+            future_year = future_dates_start.year + 1 if future_dates_start.month == 12 else future_dates_start.year
+            future_dates = pd.date_range(
+                start=f"{future_year + 1}-{start_month:02d}-01", periods=(end_month - start_month + 1), freq='MS'
+            )
+
+            for _ in range(len(future_dates)):
+                future_pred = model.predict(last_data_point)
+                future_predictions.append(future_pred[0][0])
+                last_data_point = np.roll(last_data_point, -1, axis=1)
+                last_data_point[0, -1, 0] = future_pred
+
+            future_predictions_rescaled = scaler.inverse_transform(np.array(future_predictions).reshape(-1, 1))
+            print(f"Train size: {train_size}, Val size: {val_size}, Test size: {len(y_test)}")
+            print(df_filtered['Tanggal'][train_size + val_size:train_size + val_size + len(y_test)])
+
+            # Plotting data
+            fig, axs = plt.subplots(4, 1, figsize=(15, 18))
+
+            # Plot Training
+            axs[0].plot(train_dates.dt.strftime('%m-%Y'), y_train_rescaled.flatten(), label='Aktual', color='black', marker='o')
+            axs[0].plot(train_dates.dt.strftime('%m-%Y'), train_predictions.flatten(), label='Prediksi', color='orange', linestyle='--', marker='x')
+            axs[0].set_title('Data Training')
+            axs[0].legend()
+            axs[0].grid(True)
+            print(f"train_dates: {train_dates}")
+
+            # Plot Validation
+            axs[1].plot(val_dates.dt.strftime('%m-%Y'), y_val_rescaled.flatten(), label='Aktual', color='black', marker='o')
+            axs[1].plot(val_dates.dt.strftime('%m-%Y'), val_predictions.flatten(), label='Prediksi', color='orange', linestyle='--', marker='x')
+            axs[1].set_title('Data Validation')
+            axs[1].legend()
+            axs[1].grid(True)
+            print(f"val_dates: {val_dates}")
+
+            axs[2].plot(test_dates.dt.strftime('%m-%Y'), y_test_rescaled.flatten(), label='Aktual (Testing)', color='black', marker='o')
+            axs[2].plot(test_dates.dt.strftime('%m-%Y'), test_predictions.flatten(), label='Prediksi (Testing)', color='orange', linestyle='--', marker='x')
+            axs[2].set_title('Data Testing')
+            axs[2].legend()
+            axs[2].grid(True)
+            print(f"test_dates: {test_dates}")
+
+            # Plot Future Predictions
+            axs[3].plot(future_dates.strftime('%m-%Y'), future_predictions_rescaled.flatten(), label='Prediksi (Masa Depan)', color='blue', linestyle='--', marker='x')
+            axs[3].set_title('Prediksi Masa Depan')
+            axs[3].legend()
+            axs[3].grid(True)
+            
+
+
+            # Simpan Plot ke Buffer
+            plt.tight_layout()
+            img = BytesIO()
+            plt.savefig(img, format='png')
+            img.seek(0)
+            plt.close()
+            
+            plot_url = b64encode(img.getvalue()).decode('utf8')
+            
+            train_mae = mean_absolute_error(y_train_rescaled, train_predictions)
+            train_mse = mean_squared_error(y_train_rescaled, train_predictions)
+            train_rmse = np.sqrt(train_mse)
+            train_mape = mean_absolute_percentage_error(y_train_rescaled, train_predictions)
+
+            val_mae = mean_absolute_error(y_val_rescaled, val_predictions)
+            val_mse = mean_squared_error(y_val_rescaled, val_predictions)
+            val_rmse = np.sqrt(val_mse)
+            val_mape = mean_absolute_percentage_error(y_val_rescaled, val_predictions)
+
+            test_mae = mean_absolute_error(y_test_rescaled, test_predictions)
+            test_mse = mean_squared_error(y_test_rescaled, test_predictions)
+            test_rmse = np.sqrt(test_mse)
+            test_mape = mean_absolute_percentage_error(y_test_rescaled, test_predictions)
+
+            return jsonify({
+                'plot_url': plot_url,
+                'train_mae': train_mae,
+                'train_mse': train_mse,
+                'train_rmse': train_rmse,
+                'train_mape': train_mape,
+                'val_mae': val_mae,
+                'val_mse': val_mse,
+                'val_rmse': val_rmse,
+                'val_mape': val_mape,
+                'test_mae': test_mae,
+                'test_mse': test_mse,
+                'test_rmse': test_rmse,
+                'test_mape': test_mape,
+            })
+
+        except Exception as e:
+            print(f"Error occurred: {e}")
+            flash(str(e))
+            return redirect(request.url)
+
+    return render_template('predict_by_month.html')
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True)

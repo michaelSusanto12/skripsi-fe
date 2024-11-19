@@ -1,162 +1,227 @@
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
-        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"
+    />
     <title>Tentang Saya</title>
 
     <style>
-        html,
-        body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            font-family: 'Arial', sans-serif;
-        }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        font-family: "Arial", sans-serif;
+      }
 
-        body {
-            background-color: #fae8b4;
-        }
+      body {
+        background-color: #fae8b4;
+      }
 
-        .navbar-custom {
-            background-color: #3d3d3d;
-        }
+      .navbar-custom {
+        background-color: #3d3d3d;
+      }
 
-        .navbar-nav .nav-link {
-            color: #fae8b4;
-        }
+      .navbar-nav .nav-link {
+        color: #fae8b4;
+      }
 
-        .navbar-brand {
-            color: #fae8b4;
-        }
+      .navbar-brand {
+        color: #fae8b4;
+      }
 
-        .full-height-container {
-            min-height: 100vh;
-        }
+      .full-height-container {
+        min-height: 100vh;
+      }
 
-        .nav-pills .nav-link.active {
-            background-color: #3d3d3d;
-            color: #fae8b4;
-        }
+      .nav-pills .nav-link.active {
+        background-color: #3d3d3d;
+        color: #fae8b4;
+      }
 
-        .nav-pills .nav-link {
-            border-radius: 25px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            margin: 0 10px;
-        }
+      .nav-pills .nav-link {
+        border-radius: 25px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin: 0 10px;
+      }
 
-        .about-content {
-            padding: 30px;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
+      .about-content {
+        padding: 30px;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
 
-        .about-content i {
-            color: #fae8b4;
-        }
+      .about-content i {
+        color: #fae8b4;
+      }
 
-        .contact-info {
-            font-weight: bold;
-        }
+      .contact-info {
+        font-weight: bold;
+      }
 
-        .section-title {
-            color: #3d3d3d;
-            font-size: 1.8em;
-            margin-bottom: 20px;
-        }
+      .section-title {
+        color: #3d3d3d;
+        font-size: 1.8em;
+        margin-bottom: 20px;
+      }
 
-        .section-description {
-            font-size: 1.1em;
-            line-height: 1.6;
-            color: #555;
-        }
+      .section-description {
+        font-size: 1.1em;
+        line-height: 1.6;
+        color: #555;
+      }
 
-        @media (max-width: 768px) {
-            .btn-primary {
-                width: 100%;
-            }
+      @media (max-width: 768px) {
+        .btn-primary {
+          width: 100%;
         }
+      }
     </style>
-</head>
+  </head>
 
-<body>
+  <body>
     <nav class="navbar navbar-custom navbar-expand-lg navbar-light">
-        <div class="container-fluid">
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
-                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse nav justify-content-end" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link active" href="/" style="color: #e0e0e0;">Beranda</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/upload" style="color: #e0e0e0;">Upload</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/predict" style="color: #fae8b4;">Prediksi</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/about" style="color: #e0e0e0;">Tentang</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/delete" style="color: #e0e0e0;">Lihat Data</a>
-                    </li>
-                    <li class="nav-item">
-                        <form action="{{ url_for('logout') }}" method="POST" style="display: inline;">
-                            <button type="submit" class="nav-link"
-                                style="background: none; border: none; color: #e0e0e0; cursor: pointer;">
-                                Logout
-                            </button>
-                        </form>
-                    </li>
-                </ul>
-            </div>
+      <div class="container-fluid">
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+          aria-controls="navbarNav"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div
+          class="collapse navbar-collapse nav justify-content-end"
+          id="navbarNav"
+        >
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              <a class="nav-link active" href="/" style="color: #e0e0e0"
+                >Beranda</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/upload" style="color: #e0e0e0"
+                >Upload</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/predict" style="color: #e0e0e0"
+                >Prediksi</a
+              >
+            </li>
+            <li class="nav-item">
+              <a
+                class="nav-link"
+                href="/predict_by_month"
+                style="color: #e0e0e0"
+                >Prediksi Bulanan</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/about" style="color: #fae8b4"
+                >Tentang</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/delete" style="color: #e0e0e0"
+                >Lihat Data</a
+              >
+            </li>
+            <li class="nav-item">
+              <form
+                action="{{ url_for('logout') }}"
+                method="POST"
+                style="display: inline"
+              >
+                <button
+                  type="submit"
+                  class="nav-link"
+                  style="
+                    background: none;
+                    border: none;
+                    color: #e0e0e0;
+                    cursor: pointer;
+                  "
+                >
+                  Logout
+                </button>
+              </form>
+            </li>
+          </ul>
         </div>
+      </div>
     </nav>
 
-    <div class="container-fluid d-flex justify-content-center align-items-center full-height-container">
-        <div class="row justify-content-center">
-            <div class="col-12 col-md-8 text-center about-content">
-                <h1 class="section-title">Tentang Saya</h1>
-                <p class="section-description">
-                    Halo! Nama saya <strong>Michael Yesaya Susanto</strong>, seorang mahasiswa dari <strong>Fakultas
-                        Teknologi Informasi (FTI)</strong> Universitas Tarumanagara, dengan NIM
-                    <strong>535210012</strong>.
-                    Website ini saya buat sebagai bagian dari <strong>Tugas Akhir Skripsi</strong> untuk mengembangkan
-                    sistem prediksi penjualan menggunakan <strong>algoritma LSTM</strong> (Long Short-Term Memory).
-                </p>
-                <p class="section-description">
-                    Tujuan dari website ini adalah untuk memudahkan pengguna dalam meng-upload data penjualan dan
-                    menghasilkan prediksi penjualan yang akurat dengan teknologi machine learning. Selain itu, Anda juga
-                    dapat melihat data yang telah diupload sebelumnya dan mengevaluasi hasil prediksi yang dihasilkan.
-                </p>
+    <div
+      class="container-fluid d-flex justify-content-center align-items-center full-height-container"
+    >
+      <div class="row justify-content-center">
+        <div class="col-12 col-md-8 text-center about-content">
+          <h1 class="section-title">Tentang Saya</h1>
+          <p class="section-description">
+            Halo! Nama saya <strong>Michael Yesaya Susanto</strong>, seorang
+            mahasiswa dari
+            <strong>Fakultas Teknologi Informasi (FTI)</strong> Universitas
+            Tarumanagara, dengan NIM <strong>535210012</strong>. Website ini
+            saya buat sebagai bagian dari
+            <strong>Tugas Akhir Skripsi</strong> untuk mengembangkan sistem
+            prediksi penjualan menggunakan <strong>algoritma LSTM</strong> (Long
+            Short-Term Memory).
+          </p>
+          <p class="section-description">
+            Tujuan dari website ini adalah untuk memudahkan pengguna dalam
+            meng-upload data penjualan dan menghasilkan prediksi penjualan yang
+            akurat dengan teknologi machine learning. Selain itu, Anda juga
+            dapat melihat data yang telah diupload sebelumnya dan mengevaluasi
+            hasil prediksi yang dihasilkan.
+          </p>
 
-                <div class="contact-info">
-                    <h3>Kontak</h3>
-                    <p>Email: <a href="mailto:yesayamichael13@gmail.com">yesayamichael13@gmail.com</a></p>
-                </div>
+          <div class="contact-info">
+            <h3>Kontak</h3>
+            <p>
+              Email:
+              <a href="mailto:yesayamichael13@gmail.com"
+                >yesayamichael13@gmail.com</a
+              >
+            </p>
+          </div>
 
-                <div>
-                    <i class="fas fa-user fa-5x"
-                        style="text-shadow: 1px 1px 0 #000, 2px 2px 5px rgba(0, 0, 0, 0.8);"></i>
-                </div>
-            </div>
+          <div>
+            <i
+              class="fas fa-user fa-5x"
+              style="
+                text-shadow: 1px 1px 0 #000, 2px 2px 5px rgba(0, 0, 0, 0.8);
+              "
+            ></i>
+          </div>
         </div>
+      </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"
-        integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p"
-        crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
-        integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
-        crossorigin="anonymous"></script>
-</body>
-
+    <script
+      src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"
+      integrity="sha384-IQsoLXl5PILFhosVNubq5LC7Qb9DXgDA9i+tQ8Zj3iwWAwPtgFTxbJ8NT4GN1R8p"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js"
+      integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF"
+      crossorigin="anonymous"
+    ></script>
+  </body>
 </html>

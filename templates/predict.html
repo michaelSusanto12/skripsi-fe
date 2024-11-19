@@ -65,6 +65,9 @@
                         <a class="nav-link" href="/predict" style="color: #fae8b4;">Prediksi</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/predict_by_month" style="color: #e0e0e0;">Prediksi Bulanan</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/about" style="color: #e0e0e0;">Tentang</a>
                     </li>
                     <li class="nav-item">
@@ -184,16 +187,19 @@
                 document.getElementById('train_mse').textContent = data.train_mse.toFixed(4);
                 document.getElementById('train_rmse').textContent = data.train_rmse.toFixed(4);
                 document.getElementById('train_mape').textContent = (data.train_mape).toFixed(4);
+                document.getElementById('train_accuracy').textContent = (data.train_mape).toFixed(4);
 
                 document.getElementById('val_mae').textContent = data.val_mae.toFixed(4);
                 document.getElementById('val_mse').textContent = data.val_mse.toFixed(4);
                 document.getElementById('val_rmse').textContent = data.val_rmse.toFixed(4);
                 document.getElementById('val_mape').textContent = (data.val_mape).toFixed(4);
+                document.getElementById('val_accuracy').textContent = (data.train_mape).toFixed(4);
 
                 document.getElementById('test_mae').textContent = data.test_mae.toFixed(4);
                 document.getElementById('test_mse').textContent = data.test_mse.toFixed(4);
                 document.getElementById('test_rmse').textContent = data.test_rmse.toFixed(4);
                 document.getElementById('test_mape').textContent = (data.test_mape).toFixed(4);
+                document.getElementById('test_accuracy').textContent = (data.train_mape).toFixed(4);
 
             } catch (error) {
                 console.error('Error:', error);
