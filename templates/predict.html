@@ -126,6 +126,7 @@
                             <li>MSE: <span id="train_mse"></span></li>
                             <li>RMSE: <span id="train_rmse"></span></li>
                             <li>MAPE: <span id="train_mape"></span></li>
+                            <li>Accuracy: <span id="train_accuracy"></span></li>
                         </ul>
                     </div>
                     <div class="col-md-4">
@@ -135,6 +136,7 @@
                             <li>MSE: <span id="val_mse"></span></li>
                             <li>RMSE: <span id="val_rmse"></span></li>
                             <li>MAPE: <span id="val_mape"></span></li>
+                            <li>Accuracy: <span id="val_accuracy"></span></li>
                         </ul>
                     </div>
                     <div class="col-md-4">
@@ -144,75 +146,75 @@
                             <li>MSE: <span id="test_mse"></span></li>
                             <li>RMSE: <span id="test_rmse"></span></li>
                             <li>MAPE: <span id="test_mape"></span></li>
+                            <li>Accuracy: <span id="test_accuracy"></span></li>
                         </ul>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <script>
-        document.getElementById('predict-form').addEventListener('submit', async function (event) {
-            event.preventDefault();
-            const formData = new FormData(this);
-            const predictBtn = document.getElementById('predict-btn');
-            const spinner = document.getElementById('loadingSpinner');
-            const buttonText = document.getElementById('buttonText');
-            const plotElement = document.getElementById('plot');
-            const metricsContainer = document.getElementById('metrics');
+        <script>
+            document.getElementById('predict-form').addEventListener('submit', async function (event) {
+                event.preventDefault();
 
-            spinner.style.display = 'inline-block';
-            buttonText.style.display = 'none';
-            predictBtn.disabled = true;
-            plotElement.style.display = 'none';
-            metricsContainer.style.display = 'none';
+                const formData = new FormData(this);
+                const predictBtn = document.getElementById('predict-btn');
+                const spinner = document.getElementById('loadingSpinner');
+                const buttonText = document.getElementById('buttonText');
+                const plotElement = document.getElementById('plot');
+                const metricsContainer = document.getElementById('metrics');
 
-            try {
-                const response = await fetch('/predict', {
-                    method: 'POST',
-                    body: formData,
-                });
+                // Reset display states
+                spinner.style.display = 'inline-block';
+                buttonText.style.display = 'none';
+                predictBtn.disabled = true;
+                plotElement.style.display = 'none';
+                metricsContainer.style.display = 'none';
 
-                if (!response.ok) {
-                    throw new Error('Network response was not ok.');
+                try {
+                    const response = await fetch('/predict', {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok.');
+                    }
+
+                    const data = await response.json();
+
+                    // Display plot
+                    plotElement.src = 'data:image/png;base64,' + data.plot_url;
+                    plotElement.style.display = 'block';
+
+                    // Display metrics
+                    metricsContainer.style.display = 'block';
+
+                    // Fill metrics data
+                    const metrics = ['mae', 'mse', 'rmse', 'mape', 'accuracy'];
+                    ['train', 'val', 'test'].forEach(type => {
+                        metrics.forEach(metric => {
+                            const element = document.getElementById(`${type}_${metric}`);
+                            if (element && data[`${type}_${metric}`] !== undefined) {
+                                element.textContent = data[`${type}_${metric}`].toFixed(4);
+                            }
+                        });
+                    });
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('An error occurred while processing the prediction.');
+                } finally {
+                    // Reset button and spinner
+                    spinner.style.display = 'none';
+                    buttonText.style.display = 'inline';
+                    predictBtn.disabled = false;
                 }
+            });
+        </script>
 
-                const data = await response.json();
 
-                plotElement.src = 'data:image/png;base64,' + data.plot_url;
-                plotElement.style.display = 'block';
-
-                metricsContainer.style.display = 'block';
-                document.getElementById('train_mae').textContent = data.train_mae.toFixed(4);
-                document.getElementById('train_mse').textContent = data.train_mse.toFixed(4);
-                document.getElementById('train_rmse').textContent = data.train_rmse.toFixed(4);
-                document.getElementById('train_mape').textContent = (data.train_mape).toFixed(4);
-                document.getElementById('train_accuracy').textContent = (data.train_mape).toFixed(4);
-
-                document.getElementById('val_mae').textContent = data.val_mae.toFixed(4);
-                document.getElementById('val_mse').textContent = data.val_mse.toFixed(4);
-                document.getElementById('val_rmse').textContent = data.val_rmse.toFixed(4);
-                document.getElementById('val_mape').textContent = (data.val_mape).toFixed(4);
-                document.getElementById('val_accuracy').textContent = (data.train_mape).toFixed(4);
-
-                document.getElementById('test_mae').textContent = data.test_mae.toFixed(4);
-                document.getElementById('test_mse').textContent = data.test_mse.toFixed(4);
-                document.getElementById('test_rmse').textContent = data.test_rmse.toFixed(4);
-                document.getElementById('test_mape').textContent = (data.test_mape).toFixed(4);
-                document.getElementById('test_accuracy').textContent = (data.train_mape).toFixed(4);
-
-            } catch (error) {
-                console.error('Error:', error);
-                alert('An error occurred while processing the prediction.');
-            } finally {
-                spinner.style.display = 'none';
-                buttonText.style.display = 'inline';
-                predictBtn.disabled = false;
-            }
-        });
-    </script>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>

@@ -158,6 +158,7 @@
                             <li>MSE: <span id="train_mse"></span></li>
                             <li>RMSE: <span id="train_rmse"></span></li>
                             <li>MAPE: <span id="train_mape"></span></li>
+                            <li>Accuracy: <span id="train_accuracy"></span></li>
                         </ul>
                     </div>
                     <div class="col-md-4">
@@ -167,6 +168,7 @@
                             <li>MSE: <span id="val_mse"></span></li>
                             <li>RMSE: <span id="val_rmse"></span></li>
                             <li>MAPE: <span id="val_mape"></span></li>
+                            <li>Accuracy: <span id="val_accuracy"></span></li>
                         </ul>
                     </div>
                     <div class="col-md-4">
@@ -176,6 +178,7 @@
                             <li>MSE: <span id="test_mse"></span></li>
                             <li>RMSE: <span id="test_rmse"></span></li>
                             <li>MAPE: <span id="test_mape"></span></li>
+                            <li>Accuracy: <span id="test_accuracy"></span></li>
                         </ul>
                     </div>
                 </div>
@@ -203,7 +206,6 @@
                 const plotElement = document.getElementById('plot');
                 const metricsContainer = document.getElementById('metrics');
 
-
                 spinner.style.display = 'inline-block';
                 buttonText.style.display = 'none';
                 predictBtn.disabled = true;
@@ -229,17 +231,21 @@
                     document.getElementById('train_mae').textContent = data.train_mae.toFixed(4);
                     document.getElementById('train_mse').textContent = data.train_mse.toFixed(4);
                     document.getElementById('train_rmse').textContent = data.train_rmse.toFixed(4);
-                    document.getElementById('train_mape').textContent = (data.train_mape).toFixed(4);
+                    document.getElementById('train_mape').textContent = data.train_mape.toFixed(4);
+                    document.getElementById('train_accuracy').textContent = (data.train_accuracy).toFixed(2) + '%';
 
                     document.getElementById('val_mae').textContent = data.val_mae.toFixed(4);
                     document.getElementById('val_mse').textContent = data.val_mse.toFixed(4);
                     document.getElementById('val_rmse').textContent = data.val_rmse.toFixed(4);
-                    document.getElementById('val_mape').textContent = (data.val_mape).toFixed(4);
+                    document.getElementById('val_mape').textContent = data.val_mape.toFixed(4);
+                    document.getElementById('val_accuracy').textContent = (data.val_accuracy).toFixed(2) + '%';
 
                     document.getElementById('test_mae').textContent = data.test_mae.toFixed(4);
                     document.getElementById('test_mse').textContent = data.test_mse.toFixed(4);
                     document.getElementById('test_rmse').textContent = data.test_rmse.toFixed(4);
-                    document.getElementById('test_mape').textContent = (data.test_mape).toFixed(4);
+                    document.getElementById('test_mape').textContent = data.test_mape.toFixed(4);
+                    document.getElementById('test_accuracy').textContent = (data.test_accuracy).toFixed(2) + '%';
+
 
                 } catch (error) {
                     console.error('Error:', error);
@@ -251,6 +257,7 @@
                 }
             });
         </script>
+
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>

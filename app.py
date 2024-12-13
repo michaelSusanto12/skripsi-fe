@@ -625,17 +625,21 @@ def predict():
         n_months = int(request.form.get('n_months'))  
 
         try:
+            # Preprocessing data
             df = read_and_process_data(category)
             scaler = MinMaxScaler(feature_range=(0, 1))
             scaled_data = scaler.fit_transform(df['Total'].values.reshape(-1, 1))
 
+            # Model parameters
             units_1 = 128
             units_2 = 64
-            batch_size = 32
+            batch_size = 16
             look_back = 1
             epoch = 100
             learning_rate = 0.001
+            patience = 25
 
+            # Prepare dataset
             X, y = create_dataset(scaled_data, look_back)
             X = np.reshape(X, (X.shape[0], X.shape[1], 1))
 
@@ -645,20 +649,23 @@ def predict():
             X_val, y_val = X[train_size:train_size + val_size], y[train_size:train_size + val_size]
             X_test, y_test = X[train_size + val_size:], y[train_size + val_size:]
 
+            # Build the LSTM model with two layers
             model = Sequential()
-            model.add(LSTM(units_1, return_sequences=True, input_shape=(look_back, 1)))
+            model.add(LSTM(units_1, return_sequences=True, input_shape=(look_back, 1)))  # Layer pertama
+            model.add(Dropout(0.2))  # Dropout setelah layer pertama
+            model.add(LSTM(units_2))  # Layer kedua
             model.add(Dropout(0.2))
-            model.add(LSTM(units_2))
-            model.add(Dropout(0.2))
-            model.add(Dense(1))
+            model.add(Dense(1))   # Output layer
 
+            # Compile the model
             optimizer = Adam(learning_rate=learning_rate)
             model.compile(optimizer=optimizer, loss=Huber())
 
-            early_stopping = EarlyStopping(monitor='val_loss', patience=20, restore_best_weights=True)
+            # Train the model
+            early_stopping = EarlyStopping(monitor='val_loss', patience=patience, restore_best_weights=True)
             history = model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=epoch,
                                 batch_size=batch_size, verbose=2, callbacks=[early_stopping])
-
+            total_epochs = len(history.epoch)
             train_predictions = scaler.inverse_transform(model.predict(X_train))
             val_predictions = scaler.inverse_transform(model.predict(X_val))
             test_predictions = scaler.inverse_transform(model.predict(X_test))
@@ -696,6 +703,9 @@ def predict():
             print(future_dates.min())
 
             fig, axs = plt.subplots(3, 1, figsize=(15, 18))
+            fig.suptitle(f'Model Parameters: Units 1: {units_1}, Units 2: {units_2}, Look Back: {look_back}, '
+                        f'Batch Size: {batch_size}, Epochs: {total_epochs}, Patience: {patience}, '
+                        f'Learning Rate: {learning_rate}', fontsize=14)
         
             axs[0].plot(train_dates, y_train_rescaled, label='Aktual', color='black', linestyle='-', marker='o')
             axs[0].plot(train_dates, train_predictions, label='Prediksi', color='orange', linestyle='--', marker='x')
@@ -741,6 +751,7 @@ def predict():
             axs[2].grid(True)
 
             plt.tight_layout()
+            plt.subplots_adjust(top=0.93)
 
             img = BytesIO()
             plt.savefig(img, format='png', dpi=100)
@@ -753,16 +764,24 @@ def predict():
             train_mse = mean_squared_error(y_train_rescaled, train_predictions)
             train_rmse = np.sqrt(train_mse)
             train_mape = mean_absolute_percentage_error(y_train_rescaled, train_predictions)
+            train_accuracy = 100 - (train_mape * 100)
 
             val_mae = mean_absolute_error(y_val_rescaled, val_predictions)
             val_mse = mean_squared_error(y_val_rescaled, val_predictions)
             val_rmse = np.sqrt(val_mse)
             val_mape = mean_absolute_percentage_error(y_val_rescaled, val_predictions)
+            val_accuracy = 100 - (val_mape * 100)
 
             test_mae = mean_absolute_error(y_test_rescaled, test_predictions)
             test_mse = mean_squared_error(y_test_rescaled, test_predictions)
             test_rmse = np.sqrt(test_mse)
             test_mape = mean_absolute_percentage_error(y_test_rescaled, test_predictions)
+            test_accuracy = 100 - (test_mape * 100)
+            print(f"patience: {patience}")
+            print(f"batch size: {batch_size}")
+            print(f"units 1: {units_1}")
+            print(f"look back: {look_back}")
+            print(f"learning rate: {learning_rate}")
 
             return jsonify({
                 'plot_url': plot_url,
@@ -770,14 +789,17 @@ def predict():
                 'train_mse': train_mse,
                 'train_rmse': train_rmse,
                 'train_mape': train_mape,
+                'train_accuracy': train_accuracy,
                 'val_mae': val_mae,
                 'val_mse': val_mse,
                 'val_rmse': val_rmse,
                 'val_mape': val_mape,
+                'val_accuracy': val_accuracy,
                 'test_mae': test_mae,
                 'test_mse': test_mse,
                 'test_rmse': test_rmse,
                 'test_mape': test_mape,
+                'test_accuracy': test_accuracy,
             })
 
         except Exception as e:
@@ -1141,7 +1163,6 @@ def predict_by_month():
             axs[3].grid(True)
             
 
-
             # Simpan Plot ke Buffer
             plt.tight_layout()
             img = BytesIO()
@@ -1155,16 +1176,20 @@ def predict_by_month():
             train_mse = mean_squared_error(y_train_rescaled, train_predictions)
             train_rmse = np.sqrt(train_mse)
             train_mape = mean_absolute_percentage_error(y_train_rescaled, train_predictions)
+            train_accuracy = 100 - (train_mape * 100)
 
             val_mae = mean_absolute_error(y_val_rescaled, val_predictions)
             val_mse = mean_squared_error(y_val_rescaled, val_predictions)
             val_rmse = np.sqrt(val_mse)
             val_mape = mean_absolute_percentage_error(y_val_rescaled, val_predictions)
+            val_accuracy = 100 - (val_mape * 100)
 
             test_mae = mean_absolute_error(y_test_rescaled, test_predictions)
             test_mse = mean_squared_error(y_test_rescaled, test_predictions)
             test_rmse = np.sqrt(test_mse)
             test_mape = mean_absolute_percentage_error(y_test_rescaled, test_predictions)
+            test_accuracy = 100 - (test_mape * 100)
+            print(f"test_mape = {test_mape}")
 
             return jsonify({
                 'plot_url': plot_url,
@@ -1172,14 +1197,17 @@ def predict_by_month():
                 'train_mse': train_mse,
                 'train_rmse': train_rmse,
                 'train_mape': train_mape,
+                'train_accuracy': train_accuracy,
                 'val_mae': val_mae,
                 'val_mse': val_mse,
                 'val_rmse': val_rmse,
                 'val_mape': val_mape,
+                'val_accuracy': val_accuracy,
                 'test_mae': test_mae,
                 'test_mse': test_mse,
                 'test_rmse': test_rmse,
                 'test_mape': test_mape,
+                'test_accuracy': test_accuracy,
             })
 
         except Exception as e:
